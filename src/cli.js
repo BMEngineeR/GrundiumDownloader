@@ -287,6 +287,7 @@ program.command("export")
       if (choice.download) opts.download = true;
       info("chosen in picker", { scans: choice.uuids.length, download: !!choice.download });
     }
+    if (opts.download) assertStore(cfg, manifest);
     const s = await refresh(cfg, manifest);
     const started = [];
     try {
@@ -389,6 +390,8 @@ program.command("run")
       for (;;) {
         const manifest = new Manifest(cfg.stateDir);
         try {
+          // Check the download folder before anything that would start work on the scanner.
+          assertStore(cfg, manifest);
           const s = await refresh(cfg, manifest);
           try {
             if (cfg.autoExport) {

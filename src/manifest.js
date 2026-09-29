@@ -121,14 +121,16 @@ export class Manifest {
    * An unmounted drive or an empty mount point has no marker, so nothing there is
    * reported lost; a folder whose slides were deleted keeps its marker and works normally.
    * Projects created before the marker existed get one the first time the folder
-   * clearly is the real one (it exists and nothing recorded in it is missing).
+   * clearly is the real one (files recorded there and none missing); otherwise "init".
    */
   localStoreAvailable(dest) {
     if (!fs.existsSync(dest)) return false;
     const marker = path.join(dest, STORE_MARKER);
     if (fs.existsSync(marker)) return true;
     const inDest = this.all().filter((r) => r.status === "downloaded" && r.local_path && r.local_path.startsWith(dest + path.sep));
-    if (inDest.every((r) => fs.existsSync(r.local_path))) { writeStoreMarker(dest); return true; }
+    // Auto-mark only with evidence that this is the real folder: recorded files present.
+    // With nothing recorded there is no evidence, so the user confirms by running "init".
+    if (inDest.length > 0 && inDest.every((r) => fs.existsSync(r.local_path))) { writeStoreMarker(dest); return true; }
     return false;
   }
 

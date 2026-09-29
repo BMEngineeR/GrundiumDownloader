@@ -146,3 +146,7 @@ cd GrundiumDownloader && npm install && npm link
 ```
 
 Docs live in `docs/index.html` and are served with GitHub Pages.
+
+## License
+
+MIT. See [LICENSE](LICENSE). Not affiliated with Grundium.

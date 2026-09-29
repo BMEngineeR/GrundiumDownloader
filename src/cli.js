@@ -6,7 +6,8 @@ import { PROJECT_FILE, initProject, loadProject, credentialsFor } from "./config
 import { saveCredentials, hasCredentials } from "./secrets.js";
 import { launchBrowser, closeBrowser, RpcRecorder, login, screenshot, ensureChrome } from "./browser.js";
 import { listDevices, connectDevice, listImages, exportsState, storageStatus, deviceState, triggerExport, waitForExport } from "./scanner.js";
-import { fetchExport, verifyFile, probe } from "./download.js";
+import { fetchExport, verifyFile, probe, abortDownloads } from "./download.js";
+import { spawn } from "node:child_process";
 import { Manifest } from "./manifest.js";
 import { toCsv, toTable, COLUMNS } from "./csv.js";
 import { info, warn, error, sleep, notify } from "./log.js";
@@ -93,27 +94,53 @@ function matches(rec, opts) {
   return true;
 }
 
+/** Keep a Mac awake while transfers run; no-op elsewhere. Returns a stop function. */
+function keepAwake() {
+  if (process.platform !== "darwin") return () => {};
+  const p = spawn("caffeinate", ["-i", "-w", String(process.pid)], { stdio: "ignore" }).on("error", () => {});
+  return () => { try { p.kill(); } catch {} };
+}
+
+/** Fresh export URL for a scan, by re-reading the scanner's export list. */
+async function freshExportUrl(cfg, manifest, rec) {
+  const s = await refresh(cfg, manifest);
+  await s.close();
+  return manifest.get(rec.uuid)?.export_url || null;
+}
+
 async function downloadReady(cfg, manifest, opts = {}) {
   const todo = manifest.byStatus("downloadable").concat(manifest.byStatus("failed").filter((r) => r.export_url))
     .filter((r) => matches(r, opts)).slice(0, opts.limit || Infinity);
   const summary = { downloaded: 0, skipped: 0, failed: 0 };
+  const stopAwake = keepAwake();
+  let stop = false;
+  const onSignal = () => { if (!stop) { stop = true; warn("interrupted: finishing up, partial file kept for the next run"); abortDownloads(); } };
+  process.on("SIGINT", onSignal); process.on("SIGTERM", onSignal);
+  try {
   for (const rec of todo) {
+    if (stop) break;
     try {
       const head = await probe(rec.export_url);
-      if (!head.ok) throw new Error(`export URL not reachable (HTTP ${head.status})`);
+      if (!head.ok && head.status !== 403 && head.status !== 404) throw new Error(`export URL not reachable (HTTP ${head.status})`);
       const fname = rec.export_url.split("/").pop() || rec.name + ".svs";
-      const out = await fetchExport(rec.export_url, cfg.dest, decodeURIComponent(fname), head.size);
+      const out = await fetchExport(rec.export_url, cfg.dest, decodeURIComponent(fname), head.size, { refreshUrl: () => freshExportUrl(cfg, manifest, rec) });
       manifest.upsert(rec.uuid, { status: "downloaded", local_path: out.file, size_on_disk: out.size, tiff: out.kind, downloaded_at: new Date().toISOString(), verified_at: new Date().toISOString(), last_error: "", selected: false });
       out.skipped ? summary.skipped++ : summary.downloaded++;
       info(out.skipped ? "already on disk, adopted" : "downloaded", { name: rec.name, file: out.file, size: out.size });
     } catch (e) {
+      if (e.interrupted) { manifest.save(); break; }
       summary.failed++;
       manifest.upsert(rec.uuid, { status: "failed", attempts: (rec.attempts || 0) + 1, last_error: String(e.message || e) });
       error("download failed", { name: rec.name, err: String(e.message || e) });
     }
     manifest.save();
   }
+  } finally {
+    process.off("SIGINT", onSignal); process.off("SIGTERM", onSignal);
+    stopAwake();
+  }
   writeCsv(cfg, manifest);
+  if (stop) process.exit(130);
   return summary;
 }
 

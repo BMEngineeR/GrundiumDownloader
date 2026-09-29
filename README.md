@@ -107,6 +107,8 @@ reference, see the [documentation](https://bmengineer.github.io/GrundiumDownload
 ## Notes
 
 - The tool only reads from the scanner unless you run `export` or set `autoExport: true`.
+- Downloads resume after stalls, network errors, Ctrl-C or a fresh export URL; on a Mac the
+  tool keeps the machine awake while transferring.
 - Credentials are stored AES-256-GCM encrypted in `.grundium/`. Never commit that folder.
 - Each export is a full copy on the scanner's disk. Export a few at a time and clear old
   exports on the device now and then.

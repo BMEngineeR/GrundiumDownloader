@@ -94,7 +94,7 @@
     <li><a href="#cmd-config">config</a></li>
     <li><a href="#cmd-login">login</a></li>
     <li><a href="#cmd-list">list</a></li>
-    <li><a href="#cmd-download">download</a></li>
+    <li><a href="#cmd-download">download</a><ul><li><a href="#interruptions">Interruptions</a></li></ul></li>
     <li><a href="#cmd-verify">verify</a></li>
     <li><a href="#cmd-export">export</a></li>
     <li><a href="#cmd-run">run</a></li>
@@ -232,7 +232,16 @@ GrundiumGrab list --cached -f json</code></pre>
   <dt>-l, --limit &lt;n&gt;</dt><dd>Stop after this many files.</dd>
 </dl>
 <p>For each file the tool sends a HEAD request to learn the size, streams the body into <code>&lt;name&gt;.svs.part</code>, resumes from that file with a Range request if it already exists, and after the transfer checks that the size matches and that the header is TIFF or BigTIFF. Only then is the file renamed into the destination folder and the manifest updated with the path, size and timestamps. A file that is already present and valid is adopted without downloading.</p>
-<div class="note">Downloads go through the scanner's cloud relay unless the machine can reach the scanner directly. Expect roughly 10 MB/s via the relay; a 1 GB slide takes about two minutes.</div>
+<h3 id="interruptions">Interruptions <a class="anchor" href="#interruptions">#</a></h3>
+<ul>
+  <li><strong>Stall.</strong> A transfer that receives no bytes for 60 seconds is aborted and retried.</li>
+  <li><strong>Retries.</strong> Network errors, stalls and server errors are retried three times, after 10, 30 and 90 seconds, each time resuming the partial file. After that the scan is marked <code>failed</code> and the next <code>download</code> or <code>run</code> tries again.</li>
+  <li><strong>Expired URL.</strong> A 403 or 404 makes the tool re-read the scanner's export list once and continue with the fresh URL.</li>
+  <li><strong>Changed file.</strong> If the partial file is larger than the file now on the server, or the server resumes at a different offset, the download restarts from zero.</li>
+  <li><strong>Ctrl-C.</strong> The partial file is kept and the manifest saved; the next run resumes where it stopped.</li>
+  <li><strong>Sleep.</strong> On macOS the tool runs <code>caffeinate</code> while downloading so the laptop does not sleep mid-file.</li>
+</ul>
+<div class="note">Downloads go through the scanner's cloud relay unless the machine can reach the scanner directly. Expect 2 to 10 MB/s via the relay; a 1 GB slide takes two to eight minutes.</div>
 
 <h3 id="cmd-verify"><code>GrundiumGrab verify</code> <a class="anchor" href="#cmd-verify">#</a></h3>
 <p>Checks every <code>downloaded</code> entry against the disk without contacting the scanner. Files that are missing go back to <code>downloadable</code> (or <code>not_exported</code> when the export URL is gone); files that fail the size or header check go to <code>failed</code>; the rest get a fresh <code>verified_at</code>. Prints the ok, broken and missing files and a count of what is still not downloaded, by status.</p>

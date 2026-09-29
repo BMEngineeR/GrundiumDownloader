@@ -4,7 +4,7 @@ import path from "node:path";
 import { Command } from "commander";
 import { PROJECT_FILE, initProject, loadProject, credentialsFor } from "./config.js";
 import { saveCredentials, hasCredentials } from "./secrets.js";
-import { launchBrowser, RpcRecorder, login, screenshot, ensureChrome } from "./browser.js";
+import { launchBrowser, closeBrowser, RpcRecorder, login, screenshot, ensureChrome } from "./browser.js";
 import { listDevices, connectDevice, listImages, exportsState, storageStatus, deviceState, triggerExport, waitForExport } from "./scanner.js";
 import { fetchExport, verifyFile, probe } from "./download.js";
 import { Manifest } from "./manifest.js";
@@ -25,7 +25,10 @@ async function openScanner(cfg, { capture = true } = {}) {
   const browser = await launchBrowser({ headless: cfg.headless });
   const page = await browser.newPage();
   recorder.attach(page);
-  const close = async () => { recorder.close(); await browser.close(); };
+  // The device UI can raise a "leave this page?" prompt (beforeunload) and other dialogs;
+  // accept them all, otherwise closing the browser hangs forever.
+  page.on("dialog", (d) => d.accept().catch(() => {}));
+  const close = async () => { recorder.close(); await closeBrowser(browser); };
   try {
     await login(page, { baseUrl: cfg.baseUrl, ...creds }, { recorder });
     await connectDevice(page, recorder, { device: cfg.device });
@@ -172,10 +175,11 @@ program.command("login").description("Check credentials and list scanners on the
   const browser = await launchBrowser({ headless: cfg.headless });
   const page = await browser.newPage();
   recorder.attach(page);
+  page.on("dialog", (d) => d.accept().catch(() => {}));
   try {
     await login(page, { baseUrl: cfg.baseUrl, ...creds }, { recorder });
     console.log(JSON.stringify({ username: creds.username, credentialSource: creds.source, devices: await listDevices(page, recorder) }, null, 2));
-  } finally { await browser.close(); }
+  } finally { await closeBrowser(browser); }
 });
 
 program.command("list")

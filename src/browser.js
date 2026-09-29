@@ -71,6 +71,20 @@ export async function launchBrowser({ headless = true } = {}) {
 }
 
 /**
+ * Close the browser without ever hanging: give the graceful close a few seconds, then
+ * kill the Chrome process. Pages with beforeunload handlers can otherwise block forever.
+ */
+export async function closeBrowser(browser, { graceMs = 8000 } = {}) {
+  const proc = browser.process();
+  const timer = new Promise((r) => setTimeout(() => r("timeout"), graceMs));
+  const result = await Promise.race([browser.close().then(() => "closed", () => "error"), timer]);
+  if (result !== "closed") {
+    warn("browser did not close in time, killing it", { result });
+    try { proc?.kill("SIGKILL"); } catch {}
+  }
+}
+
+/**
  * Records every JSON-RPC exchange the Grundium web app makes, plus console output.
  * The app posts bodies like {method, params, id, auth, source, destination} and
  * gets back {result | error, id}. Every entry is appended to a JSONL file when

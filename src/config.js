@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { loadCredentials } from "./secrets.js";
+import { writeStoreMarker } from "./manifest.js";
 
 export const PROJECT_FILE = "grundium.json";
 export const STATE_DIR = ".grundium";
@@ -36,6 +37,7 @@ export function initProject(root, overrides = {}) {
   const stateDir = path.join(root, STATE_DIR);
   fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
   fs.mkdirSync(path.join(root, cfg.dest), { recursive: true });
+  writeStoreMarker(path.join(root, cfg.dest));
   const gi = path.join(root, ".gitignore");
   const lines = fs.existsSync(gi) ? fs.readFileSync(gi, "utf8").split("\n") : [];
   for (const l of [STATE_DIR + "/", cfg.dest + "/", "node_modules/"]) if (!lines.includes(l)) lines.push(l);

@@ -3,6 +3,11 @@ import path from "node:path";
 import { verifyFile, safeName } from "./download.js";
 import { parseCsv, isMarked } from "./csv.js";
 
+export const STORE_MARKER = ".grundium-store";
+export function writeStoreMarker(dest) {
+  fs.writeFileSync(path.join(dest, STORE_MARKER), "GrundiumGrab download folder. Do not delete; it tells the tool this drive is mounted.\n");
+}
+
 /**
  * Local source of truth, keyed by ImageUUID. Statuses:
  *   not_exported  on the scanner, no export yet
@@ -112,14 +117,19 @@ export class Manifest {
   }
 
   /**
-   * The download folder is usable when it exists and, if we have downloaded files recorded
-   * in it, at least one of them is still there. All of them missing at once looks like an
-   * unmounted drive (on Linux the mount point stays as an empty directory), not deletions.
+   * The download folder is usable when it holds the marker file that "init" writes.
+   * An unmounted drive or an empty mount point has no marker, so nothing there is
+   * reported lost; a folder whose slides were deleted keeps its marker and works normally.
+   * Projects created before the marker existed get one the first time the folder
+   * clearly is the real one (it exists and nothing recorded in it is missing).
    */
   localStoreAvailable(dest) {
     if (!fs.existsSync(dest)) return false;
+    const marker = path.join(dest, STORE_MARKER);
+    if (fs.existsSync(marker)) return true;
     const inDest = this.all().filter((r) => r.status === "downloaded" && r.local_path && r.local_path.startsWith(dest + path.sep));
-    return inDest.length === 0 || inDest.some((r) => fs.existsSync(r.local_path));
+    if (inDest.every((r) => fs.existsSync(r.local_path))) { writeStoreMarker(dest); return true; }
+    return false;
   }
 
   rows() {

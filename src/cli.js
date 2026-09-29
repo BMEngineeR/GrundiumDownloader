@@ -101,9 +101,8 @@ function assertStore(cfg, manifest) {
       `otherwise create it (mkdir) or run "GrundiumGrab init" again.`);
   }
   if (!manifest.localStoreAvailable(cfg.dest)) {
-    throw new Error(`none of the downloaded files in ${cfg.dest} can be found. If it is on an external drive, ` +
-      `mount it and try again. If the files were really deleted, remove ${path.join(cfg.stateDir, "manifest.json")} ` +
-      `entries or re-run "GrundiumGrab list" after restoring at least one file.`);
+    throw new Error(`download folder ${cfg.dest} has no .grundium-store marker, so it looks like an unmounted drive. ` +
+      `Mount the drive and try again. If this really is the right folder, run "GrundiumGrab init" in the project to mark it.`);
   }
 }
 

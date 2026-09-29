@@ -101,6 +101,12 @@ few at a time. Full details: https://bmengineer.github.io/GrundiumDownloader/#ex
 */15 * * * * cd ~/slides && GrundiumGrab run --interval 0 >> grab.log 2>&1
 ```
 
+Refreshes only notice missing files. Check file contents once a day too:
+
+```
+0 3 * * * cd ~/slides && GrundiumGrab verify >> verify.log 2>&1
+```
+
 For systemd, launchd, passphrase-protected credentials on servers, and the full command
 reference, see the [documentation](https://bmengineer.github.io/GrundiumDownloader/).
 

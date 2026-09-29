@@ -3,6 +3,12 @@ import path from "node:path";
 import { verifyFile, safeName } from "./download.js";
 import { parseCsv, isMarked } from "./csv.js";
 
+export const STORE_MARKER = ".grundium-store";
+export function writeStoreMarker(dest) {
+  try { fs.writeFileSync(path.join(dest, STORE_MARKER), "GrundiumGrab download folder. Do not delete; it tells the tool this drive is mounted.\n"); return true; }
+  catch { return false; }   // read-only drive: fall back to the evidence check each time
+}
+
 /**
  * Local source of truth, keyed by ImageUUID. Statuses:
  *   not_exported  on the scanner, no export yet
@@ -42,6 +48,9 @@ export class Manifest {
     const readyByName = new Map();
     for (const c of exports.completed || []) if (c.URL && nameOf(c)) readyByName.set(nameOf(c), c);
     const busyNames = new Set([...(exports.ongoing || [])].map(nameOf).filter(Boolean));
+    // If the download folder is unavailable (unplugged drive, empty mount point), say nothing
+    // about local files rather than declaring every one of them lost.
+    const destOk = !dest || this.localStoreAvailable(dest);
     const seen = new Set();
     for (const img of images) {
       const uuid = img.ImageUUID;
@@ -52,7 +61,7 @@ export class Manifest {
         user: img.UserName, size_bytes: img.Size, size_gb: (img.Size / 1e9).toFixed(2),
       };
       const ready = readyByName.get(img.DisplayName);
-      const localGone = cur?.status === "downloaded" && cur.local_path && !fs.existsSync(cur.local_path);
+      const localGone = destOk && cur?.status === "downloaded" && cur.local_path && !fs.existsSync(cur.local_path);
       if (localGone) {
         // The file vanished from disk: fall back to re-download or re-export on the next cycle.
         Object.assign(patch, ready
@@ -76,21 +85,54 @@ export class Manifest {
       if (patch.status !== "downloaded" && cur?.status !== "downloaded" && dest) {
         const guess = path.join(dest, safeName(img.DisplayName) + ".svs");
         const v = verifyFile(guess);
-        if (v.ok) Object.assign(patch, { status: "downloaded", local_path: guess, verified_at: new Date().toISOString(), downloaded_at: cur?.downloaded_at || new Date().toISOString() });
+        if (v.ok) Object.assign(patch, { status: "downloaded", local_path: guess, lost_local_path: "", verified_at: new Date().toISOString(), downloaded_at: cur?.downloaded_at || new Date().toISOString() });
       }
       this.upsert(uuid, patch);
     }
     for (const rec of this.all()) {
-      if (seen.has(rec.uuid) || rec.status === "downloaded") continue;
+      if (seen.has(rec.uuid)) continue;
+      // A lost local copy that is back (drive re-mounted, file restored): downloaded again.
+      if (rec.status === "gone" && rec.lost_local_path && fs.existsSync(rec.lost_local_path)) {
+        Object.assign(rec, { status: "downloaded", local_path: rec.lost_local_path, lost_local_path: "", gone_at: "", last_error: "" });
+        continue;
+      }
+      if (rec.status === "downloaded") {
+        // Deleted on the scanner but kept locally: only flag it if the local copy is gone too.
+        if (destOk && rec.local_path && !fs.existsSync(rec.local_path)) {
+          rec.status = "gone";
+          rec.gone_at = new Date().toISOString();
+          rec.lost_local_path = rec.local_path;   // kept separately; last_error is rewritten below
+          rec.local_path = "";
+        } else continue;
+      }
       // Deleted on the scanner. A finished export can outlive its scan, so keep it reachable.
       const ready = readyByName.get(rec.name);
       if (rec.status !== "gone") { rec.status = "gone"; rec.gone_at = new Date().toISOString(); }
       rec.export_url = ready ? ready.URL : "";
       rec.export_id = ready ? ready.ID : "";
-      rec.last_error = ready ? "scan deleted on the scanner; its export file is still downloadable" : (rec.last_error || "scan deleted on the scanner");
+      const lost = rec.lost_local_path ? `; local file missing: ${rec.lost_local_path}` : "";
+      rec.last_error = (ready ? "scan deleted on the scanner; its export file is still downloadable" : "scan deleted on the scanner") + lost;
     }
     this.data.updatedAt = new Date().toISOString();
     this.save();
+  }
+
+  /**
+   * The download folder is usable when it holds the marker file that "init" writes.
+   * An unmounted drive or an empty mount point has no marker, so nothing there is
+   * reported lost; a folder whose slides were deleted keeps its marker and works normally.
+   * Projects created before the marker existed get one the first time the folder
+   * clearly is the real one (some recorded files are there); otherwise "init".
+   */
+  localStoreAvailable(dest) {
+    if (!fs.existsSync(dest)) return false;
+    const marker = path.join(dest, STORE_MARKER);
+    if (fs.existsSync(marker)) return true;
+    const inDest = this.all().filter((r) => r.status === "downloaded" && r.local_path && r.local_path.startsWith(dest + path.sep));
+    // Auto-mark only with evidence that this is the real folder: recorded files present.
+    // With nothing recorded there is no evidence, so the user confirms by running "init".
+    if (inDest.length > 0 && inDest.some((r) => fs.existsSync(r.local_path))) { writeStoreMarker(dest); return true; }
+    return false;
   }
 
   rows() {

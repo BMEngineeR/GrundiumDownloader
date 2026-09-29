@@ -94,6 +94,18 @@ function matches(rec, opts) {
   return true;
 }
 
+/** Refuse to touch local files while the download folder looks unavailable. */
+function assertStore(cfg, manifest) {
+  if (!fs.existsSync(cfg.dest)) {
+    throw new Error(`download folder ${cfg.dest} does not exist. If it is on an external drive, mount it; ` +
+      `otherwise create it (mkdir) or run "GrundiumGrab init" again.`);
+  }
+  if (!manifest.localStoreAvailable(cfg.dest)) {
+    throw new Error(`download folder ${cfg.dest} has no .grundium-store marker, so it looks like an unmounted drive. ` +
+      `Mount the drive and try again. If this really is the right folder, run "GrundiumGrab init" in the project to mark it.`);
+  }
+}
+
 /** Keep a Mac awake while transfers run; no-op elsewhere. Returns a stop function. */
 function keepAwake() {
   if (process.platform !== "darwin") return () => {};
@@ -109,6 +121,7 @@ async function freshExportUrl(cfg, manifest, rec) {
 }
 
 async function downloadReady(cfg, manifest, opts = {}) {
+  assertStore(cfg, manifest);
   // downloadable scans, failed ones with a URL, and deleted scans whose export file survived
   const todo = manifest.byStatus("downloadable")
     .concat(manifest.byStatus("failed").filter((r) => r.export_url))
@@ -127,7 +140,7 @@ async function downloadReady(cfg, manifest, opts = {}) {
       if (!head.ok && head.status !== 403 && head.status !== 404) throw new Error(`export URL not reachable (HTTP ${head.status})`);
       const fname = rec.export_url.split("/").pop() || rec.name + ".svs";
       const out = await fetchExport(rec.export_url, cfg.dest, decodeURIComponent(fname), head.size, { refreshUrl: () => freshExportUrl(cfg, manifest, rec) });
-      manifest.upsert(rec.uuid, { status: "downloaded", local_path: out.file, size_on_disk: out.size, tiff: out.kind, downloaded_at: new Date().toISOString(), verified_at: new Date().toISOString(), last_error: "", selected: false });
+      manifest.upsert(rec.uuid, { status: "downloaded", local_path: out.file, size_on_disk: out.size, tiff: out.kind, downloaded_at: new Date().toISOString(), verified_at: new Date().toISOString(), last_error: "", selected: false, lost_local_path: "", gone_at: "" });
       out.skipped ? summary.skipped++ : summary.downloaded++;
       info(out.skipped ? "already on disk, adopted" : "downloaded", { name: rec.name, file: out.file, size: out.size });
     } catch (e) {
@@ -152,11 +165,16 @@ async function downloadReady(cfg, manifest, opts = {}) {
 program.command("init [dir]")
   .description("Create a project: grundium.json, encrypted credentials, downloads folder")
   .option("-u, --username <email>").option("-p, --password <pw>")
-  .option("--device <name>", "scanner name/UUID substring").option("--dest <dir>", "download folder", "downloads")
-  .option("--format <fmt>", "SVS or TIFF", "SVS")
+  .option("--device <name>", "scanner name/UUID substring").option("--dest <dir>", "download folder (default: downloads)")
+  .option("--format <fmt>", "SVS or TIFF (default: SVS)")
   .action(async (dir, opts) => {
     const root = path.resolve(dir || ".");
-    const cfg = initProject(root, { device: opts.device || "", dest: opts.dest, format: opts.format.toUpperCase() });
+    // Only override settings that were given, so re-running init keeps a custom dest/device/format.
+    const overrides = {};
+    if (opts.device !== undefined) overrides.device = opts.device;
+    if (opts.dest !== undefined) overrides.dest = opts.dest;
+    if (opts.format !== undefined) overrides.format = opts.format.toUpperCase();
+    const cfg = initProject(root, overrides);
     let { username, password } = opts;
     const stored = hasCredentials(cfg.stateDir);
     if (!username && !stored) username = process.env.GRUNDIUM_USERNAME || (await ask("grundium.net email: "));
@@ -274,6 +292,7 @@ program.command("export")
       if (choice.download) opts.download = true;
       info("chosen in picker", { scans: choice.uuids.length, download: !!choice.download });
     }
+    if (opts.download) assertStore(cfg, manifest);
     const s = await refresh(cfg, manifest);
     const started = [];
     try {
@@ -333,6 +352,7 @@ program.command("verify")
   .action(async (opts) => {
     const cfg = loadProject();
     const manifest = new Manifest(cfg.stateDir);
+    assertStore(cfg, manifest);
     backupCsv(cfg);
     const report = { ok: [], broken: [], missing: [], not_downloaded: [] };
     for (const rec of manifest.rows()) {
@@ -375,6 +395,8 @@ program.command("run")
       for (;;) {
         const manifest = new Manifest(cfg.stateDir);
         try {
+          // Check the download folder before anything that would start work on the scanner.
+          assertStore(cfg, manifest);
           const s = await refresh(cfg, manifest);
           try {
             if (cfg.autoExport) {

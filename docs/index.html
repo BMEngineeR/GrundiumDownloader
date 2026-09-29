@@ -174,7 +174,7 @@ GrundiumGrab download</code></pre>
 GrundiumGrab init          # asks for your grundium.net email and password
 GrundiumGrab login         # confirms the credentials and lists your scanners
 GrundiumGrab list          # reads the archive, writes scans.csv
-GrundiumGrab export        # opens a browser window: tick scans, press Start; exports, waits, downloads
+GrundiumGrab export        # opens a browser window: tick scans, press Start; exports them
 GrundiumGrab download      # later: downloads anything else that has a finished export
 GrundiumGrab verify        # checks the files on disk</code></pre>
 <p>The <code>export</code> step is the one that makes files: a scan can only be downloaded after the scanner has exported it. Without options it opens a picker page in your browser; with <code>--name</code>, <code>--limit</code> or <code>--selected</code> it works from the command line. See <a href="#export-mechanism">How export works</a>.</p>
@@ -243,7 +243,7 @@ GrundiumGrab list --cached -f json</code></pre>
 <h3 id="cmd-export"><code>GrundiumGrab export</code> <a class="anchor" href="#cmd-export">#</a></h3>
 <p>Asks the scanner to export scans that have no export yet, using the export recipe saved on the account (destination WebDL, format SVS or TIFF), then rewrites <code>scans.csv</code>. A scan is stored on the device in its own format; an export is the scanner writing an SVS/TIFF copy, which takes from under a minute for a small slide to many minutes for a large one. Exported scans show as <code>exporting</code> and become <code>downloadable</code> once the scanner finishes.</p>
 <h3 id="picker">The picker window <a class="anchor" href="#picker">#</a></h3>
-<p>Run <code>GrundiumGrab export</code> with no selection options (or add <code>--pick</code>) and the tool starts a tiny web server on localhost and opens a page in your default browser. It lists every scan from the inventory with a checkbox, status, date, size, name and user. You can search by name or user, filter by status with the chips at the top, sort by any column, tick "select visible", and watch the running total of selected scans and their size. Press <strong>Start</strong> to send the choice back to the terminal, or <strong>Cancel</strong>. The "Download after export" box decides whether the command also waits and downloads.</p>
+<p>Run <code>GrundiumGrab export</code> with no selection options (or add <code>--pick</code>) and the tool starts a tiny web server on localhost and opens a page in your default browser. It lists every scan from the inventory with a checkbox, status, date, size, name and user. You can search by name or user, filter by status with the chips at the top, sort by any column, tick "select visible", and watch the running total of selected scans and their size. Press <strong>Start</strong> to send the choice back to the terminal, or <strong>Cancel</strong>. The "Also download when the export is done" box, off by default, makes the command wait for the exports and download the files too; otherwise <code>export</code> only exports, like on the command line.</p>
 <p>Your choice is written to <code>scans.csv</code> the moment you press Start, before any export begins, so the file always shows what was picked. Closing the tab or pressing Cancel leaves the marks unchanged and also rewrites the file with the current statuses.</p>
 <p>The page is served only on 127.0.0.1 and closes as soon as you answer. Rows marked <code>downloaded</code>, <code>not_exportable</code> or <code>gone</code> cannot be ticked. Use <code>--no-browser</code> to print the URL instead of opening a browser, for example over SSH with port forwarding.</p>
 <dl class="opts">
@@ -257,7 +257,7 @@ GrundiumGrab list --cached -f json</code></pre>
   <dt>-w, --wait</dt><dd>Stay connected until the started exports finish and mark them <code>downloadable</code>.</dd>
   <dt>-d, --download</dt><dd>Implies <code>--wait</code>. Download the exported files as soon as they are ready and mark them <code>downloaded</code>. Only the scans this command exported are downloaded; use <code>download</code> for everything else.</dd>
 </dl>
-<pre><code>GrundiumGrab export                              # picker window, then export + download
+<pre><code>GrundiumGrab export                              # picker window, then export
 GrundiumGrab export --dry-run --limit 5          # preview
 GrundiumGrab export --name N14-JM --limit 1      # start one export, come back later with "download"
 GrundiumGrab export --limit 3 --download         # export, wait, download, all in one go

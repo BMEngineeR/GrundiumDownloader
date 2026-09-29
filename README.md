@@ -24,7 +24,7 @@ GrundiumGrab login
 # 4. Inventory the scanner -> scans.csv
 GrundiumGrab list
 
-# 5. Pick scans in a browser window, export them, wait, download them
+# 5. Pick scans in a browser window and export them (tick "also download" to fetch them too)
 GrundiumGrab export
 
 # 6. Later: download anything else that has a finished export
@@ -47,7 +47,7 @@ Chrome for Testing (about 350 MB) is downloaded automatically on the first brows
 GrundiumGrab list --status downloadable     # what is ready right now
 GrundiumGrab list --name GBM -f csv         # filter, print CSV
 GrundiumGrab download --limit 2             # at most two files this run
-GrundiumGrab export                         # choose scans in a browser window, then export + download
+GrundiumGrab export                         # choose scans in a browser window, then export them
 GrundiumGrab export --dry-run --limit 5     # preview which scans would be exported
 GrundiumGrab export --name N14-JM --limit 1 # ask the scanner to export one scan
 GrundiumGrab export --limit 3 --download    # export three, wait, download them, update csv

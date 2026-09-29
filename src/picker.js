@@ -77,7 +77,7 @@ const PAGE = `<!doctype html>
 </style></head><body>
 <header><h1>__TITLE__</h1><input id="q" type="search" placeholder="Search name or user…"><div class="chips" id="chips"></div></header>
 <main><table><thead><tr><th style="width:32px"><input type="checkbox" id="all" title="select visible"></th><th data-k="status">Status</th><th data-k="timestamp">Scanned</th><th data-k="size_bytes" class="num">Size</th><th data-k="name">Name</th><th data-k="user">User</th></tr></thead><tbody id="tb"></tbody></table></main>
-<footer><span id="count" class="muted">0 selected</span><label class="opt"><input type="checkbox" id="dl" checked> Download after export</label><span style="flex:1"></span><button id="cancel">Cancel</button><button id="go" class="primary" disabled>Start export</button></footer>
+<footer><span id="count" class="muted">0 selected</span><label class="opt"><input type="checkbox" id="dl"> Also download when the export is done</label><span style="flex:1"></span><button id="cancel">Cancel</button><button id="go" class="primary" disabled>Start export</button></footer>
 <script>
 const fmt = b => b >= 1e9 ? (b/1e9).toFixed(2)+' GB' : (b/1e6).toFixed(0)+' MB';
 const STATUSES = ['not_exported','downloadable','failed','exporting','downloaded','not_exportable','gone'];

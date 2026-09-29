@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { verifyFile, safeName } from "./download.js";
+import { parseCsv, isMarked } from "./csv.js";
 
 /**
  * Local source of truth, keyed by ImageUUID. Statuses:
@@ -35,6 +36,8 @@ export class Manifest {
    * where each entry has {ID, Description, URL}. Descriptions look like "'<name>' to WebDL".
    */
   merge(images, exports, dest) {
+    // An empty listing on a scanner that had images means the read failed; never mark everything gone.
+    if (!images.length && this.all().some((r) => r.status !== "gone")) throw new Error("refusing to merge an empty archive listing");
     const nameOf = (d) => (d.Description?.match(/^'(.*)' to /) || [])[1];
     const readyByName = new Map();
     for (const c of exports.completed || []) if (c.URL && nameOf(c)) readyByName.set(nameOf(c), c);
@@ -76,8 +79,30 @@ export class Manifest {
   }
 
   rows() {
-    return this.all().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    return this.all()
+      .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+      .map((r) => ({ ...r, select: r.selected ? "x" : "" }));
   }
+
+  /**
+   * Read the "select" column the user edited in scans.csv back into the manifest, so a
+   * refresh never wipes their marks. Rows are matched by uuid; anything else in the CSV
+   * is ignored (spreadsheets reformat numbers and dates).
+   */
+  syncSelectionFromCsv(file) {
+    if (!fs.existsSync(file)) return 0;
+    let changed = 0;
+    for (const row of parseCsv(fs.readFileSync(file, "utf8"))) {
+      const rec = row.uuid && this.data.images[row.uuid];
+      if (!rec) continue;
+      const sel = isMarked(row.select);
+      if (!!rec.selected !== sel) { rec.selected = sel; changed++; }
+    }
+    if (changed) this.save();
+    return changed;
+  }
+
+  selected() { return this.rows().filter((r) => r.selected); }
 
   summary() {
     const counts = {};

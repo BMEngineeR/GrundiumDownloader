@@ -214,6 +214,7 @@ GrundiumGrab config credentials             # replace the stored email and passw
   <dt>-f, --format table|csv|json</dt><dd>Output format. Default <code>table</code>.</dd>
   <dt>-s, --status &lt;status&gt;</dt><dd>Only rows with this <a href="#statuses">status</a>.</dd>
   <dt>-n, --name &lt;substring&gt;</dt><dd>Only rows whose name contains this text, case-insensitive.</dd>
+  <dt>--selected</dt><dd>Only rows marked with <code>x</code> in the <code>select</code> column.</dd>
 </dl>
 <pre><code>GrundiumGrab list                           # newest first
 GrundiumGrab list --status downloadable     # ready to download
@@ -225,6 +226,7 @@ GrundiumGrab list --cached -f json</code></pre>
 <p>Downloads every scan with status <code>downloadable</code> and retries those marked <code>failed</code>. Refreshes the inventory first unless <code>--cached</code> is given. Read-only on the scanner.</p>
 <dl class="opts">
   <dt>--cached</dt><dd>Skip the refresh and use the manifest as it is.</dd>
+  <dt>-s, --selected</dt><dd>Only rows marked with <code>x</code> in the <code>select</code> column of <code>scans.csv</code>.</dd>
   <dt>-n, --name &lt;substring&gt;</dt><dd>Only scans whose name contains this text.</dd>
   <dt>--uuid &lt;uuid&gt;</dt><dd>Exactly one scan by image UUID.</dd>
   <dt>-l, --limit &lt;n&gt;</dt><dd>Stop after this many files.</dd>
@@ -243,14 +245,23 @@ GrundiumGrab list --cached -f json</code></pre>
 <dl class="opts">
   <dt>-n, --name &lt;substring&gt;</dt><dd>Only scans whose name contains this text.</dd>
   <dt>--uuid &lt;uuid&gt;</dt><dd>Exactly one scan.</dd>
-  <dt>-l, --limit &lt;n&gt;</dt><dd>Maximum number of exports to start. Default 1.</dd>
+  <dt>-s, --selected</dt><dd>Batch mode: every scan marked with <code>x</code> in the <code>select</code> column of <code>scans.csv</code>. See <a href="#batch-csv">Batch export from scans.csv</a>.</dd>
+  <dt>-l, --limit &lt;n&gt;</dt><dd>Maximum number of exports to start. Default 1, or all marked rows with <code>--selected</code>.</dd>
   <dt>--dry-run</dt><dd>Only print what would be exported.</dd>
   <dt>-w, --wait</dt><dd>Stay connected until the started exports finish and mark them <code>downloadable</code>.</dd>
   <dt>-d, --download</dt><dd>Implies <code>--wait</code>. Download the exported files as soon as they are ready and mark them <code>downloaded</code>. Only the scans this command exported are downloaded; use <code>download</code> for everything else.</dd>
 </dl>
 <pre><code>GrundiumGrab export --dry-run --limit 5          # preview
 GrundiumGrab export --name N14-JM --limit 1      # start one export, come back later with "download"
-GrundiumGrab export --limit 3 --download         # export, wait, download, all in one go</code></pre>
+GrundiumGrab export --limit 3 --download         # export, wait, download, all in one go
+GrundiumGrab export --selected --download        # every row marked with x in scans.csv</code></pre>
+<h3 id="batch-csv">Batch export from scans.csv <a class="anchor" href="#batch-csv">#</a></h3>
+<ol>
+  <li>Run <code>GrundiumGrab list</code> so <code>scans.csv</code> is current.</li>
+  <li>Open <code>scans.csv</code> in Excel, Numbers, LibreOffice or a text editor. Put an <code>x</code> (or <code>yes</code>, <code>1</code>) in the <code>select</code> column for every scan you want. Save as CSV. Byte-order marks, CRLF line endings and quoted fields from spreadsheets are fine.</li>
+  <li>Run <code>GrundiumGrab export --selected --download</code>. It reads the marks back, exports every marked scan that has no export yet, waits for them, downloads them and rewrites the file. Marked scans that are already downloadable are reported; fetch them with <code>GrundiumGrab download --selected</code>.</li>
+</ol>
+<p>Marks are matched by the <code>uuid</code> column, so reformatting of dates or sizes by the spreadsheet does not matter. They survive every refresh and are cleared automatically when the scan reaches <code>downloaded</code>. <code>GrundiumGrab list --cached --selected</code> shows what is currently marked.</p>
 <p>For each scan the tool searches the archive by name, clears any selection the web app remembered from earlier sessions, ticks the one matching card, confirms that the side panel shows that scan, and only then presses Export. If any of these checks fails it refuses to press the button and records the reason in <code>last_error</code>.</p>
 <div class="warn">Each export is a full copy of the slide on the scanner's disk. Keep <code>--limit</code> small and clear finished exports on the device from time to time.</div>
 <div class="note">Overview-only captures, typically named like <code>20260610 Scanned Image 2627</code> and around 90 MB, have no scanned area. The scanner refuses to export them; the tool cancels the dialog and marks them <code>not_exportable</code> so they are not retried.</div>
@@ -282,6 +293,7 @@ GrundiumGrab run --interval 0    # one cycle</code></pre>
 <h2 id="csv">scans.csv columns <a class="anchor" href="#csv">#</a></h2>
 <table>
 <tr><th>Column</th><th>Content</th></tr>
+<tr><td><code>select</code></td><td>Put an <code>x</code> here (in Excel, Numbers or any editor) to mark the scan for <code>export --selected</code> or <code>download --selected</code>. Marks are kept across refreshes and cleared once the scan is downloaded.</td></tr>
 <tr><td><code>status</code></td><td>One of the statuses above.</td></tr>
 <tr><td><code>name</code></td><td>Display name of the scan on the device.</td></tr>
 <tr><td><code>date</code>, <code>time</code></td><td>When the scan was made, as shown by the scanner.</td></tr>

@@ -47,13 +47,19 @@ async function refresh(cfg, manifest) {
   return s;
 }
 
+function csvPath(cfg) { return path.join(cfg.root, "scans.csv"); }
+
+/** Rewrite scans.csv, first absorbing any "select" marks the user put in it. */
 function writeCsv(cfg, manifest) {
-  const file = path.join(cfg.root, "scans.csv");
+  const file = csvPath(cfg);
+  const n = manifest.syncSelectionFromCsv(file);
+  if (n) info("selection marks read from scans.csv", { changed: n, selected: manifest.selected().length });
   fs.writeFileSync(file, toCsv(manifest.rows()));
   return file;
 }
 
 function matches(rec, opts) {
+  if (opts.selected && !rec.selected) return false;
   if (opts.uuids && !opts.uuids.has(rec.uuid)) return false;
   if (opts.uuid && rec.uuid !== opts.uuid) return false;
   if (opts.name && !rec.name?.toLowerCase().includes(opts.name.toLowerCase())) return false;
@@ -70,7 +76,7 @@ async function downloadReady(cfg, manifest, opts = {}) {
       if (!head.ok) throw new Error(`export URL not reachable (HTTP ${head.status})`);
       const fname = rec.export_url.split("/").pop() || rec.name + ".svs";
       const out = await fetchExport(rec.export_url, cfg.dest, decodeURIComponent(fname), head.size);
-      manifest.upsert(rec.uuid, { status: "downloaded", local_path: out.file, size_on_disk: out.size, tiff: out.kind, downloaded_at: new Date().toISOString(), verified_at: new Date().toISOString(), last_error: "" });
+      manifest.upsert(rec.uuid, { status: "downloaded", local_path: out.file, size_on_disk: out.size, tiff: out.kind, downloaded_at: new Date().toISOString(), verified_at: new Date().toISOString(), last_error: "", selected: false });
       out.skipped ? summary.skipped++ : summary.downloaded++;
       info(out.skipped ? "already on disk, adopted" : "downloaded", { name: rec.name, file: out.file, size: out.size });
     } catch (e) {
@@ -154,10 +160,12 @@ program.command("list")
   .option("-f, --format <fmt>", "table | csv | json", "table")
   .option("-s, --status <status>", "filter: downloadable | downloaded | not_exported | exporting | failed | gone")
   .option("-n, --name <substring>", "filter by name")
+  .option("--selected", "only rows marked with x in the select column")
   .action(async (opts) => {
     const cfg = loadProject();
     const manifest = new Manifest(cfg.stateDir);
     if (!opts.cached) { const s = await refresh(cfg, manifest); await s.close(); }
+    else manifest.syncSelectionFromCsv(csvPath(cfg));
     let rows = manifest.rows().filter((r) => matches(r, opts));
     if (opts.status) rows = rows.filter((r) => r.status === opts.status);
     if (opts.format === "json") console.log(JSON.stringify(rows, null, 2));
@@ -169,6 +177,7 @@ program.command("list")
 program.command("download")
   .description("Download every scan that has a finished export (resumable, verified)")
   .option("--cached", "skip the refresh, use the manifest as-is")
+  .option("-s, --selected", "only rows marked with x in the select column of scans.csv")
   .option("-n, --name <substring>").option("--uuid <uuid>").option("-l, --limit <n>", "max files this run", (v) => parseInt(v, 10))
   .action(async (opts) => {
     const cfg = loadProject();
@@ -181,7 +190,9 @@ program.command("download")
 
 program.command("export")
   .description("Ask the scanner to export scans that have no export yet, then update scans.csv (uses scanner disk)")
-  .option("-n, --name <substring>").option("--uuid <uuid>").option("-l, --limit <n>", "max exports to start", (v) => parseInt(v, 10), 1)
+  .option("-n, --name <substring>").option("--uuid <uuid>")
+  .option("-s, --selected", "rows marked with x in the select column of scans.csv (batch)")
+  .option("-l, --limit <n>", "max exports to start (default 1, or all marked rows with --selected)", (v) => parseInt(v, 10))
   .option("--dry-run", "only show what would be exported")
   .option("-w, --wait", "stay connected until the exports finish, then mark them downloadable")
   .option("-d, --download", "implies --wait; download the files as soon as they are ready")
@@ -191,7 +202,12 @@ program.command("export")
     const s = await refresh(cfg, manifest);
     const started = [];
     try {
-      const todo = manifest.rows().filter((r) => r.status === "not_exported" && matches(r, opts)).slice(0, opts.limit);
+      const limit = opts.limit ?? (opts.selected ? Infinity : 1);
+      const todo = manifest.rows().filter((r) => r.status === "not_exported" && matches(r, opts)).slice(0, limit);
+      if (opts.selected) {
+        const other = manifest.selected().filter((r) => r.status !== "not_exported");
+        if (other.length) info("marked rows that need no export", Object.fromEntries(other.map((r) => [r.name, r.status])));
+      }
       console.log(toTable(todo));
       if (opts.dryRun || !todo.length) return;
       for (const rec of todo) {

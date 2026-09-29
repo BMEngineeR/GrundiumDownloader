@@ -20,6 +20,24 @@ function pick(devices, filter) {
 export async function connectDevice(page, recorder, { device, timeout = 60000 } = {}) {
   const inDeviceUi = () => /^\/v\d/.test(new URL(page.url()).pathname);
   if (inDeviceUi()) return page.url();
+  const url = await reachDeviceUi(page, recorder, { device, timeout });
+  // The device UI must actually talk to the scanner: wait for a DStateGet with a real
+  // result. When the relay cannot reach the device, calls come back with a null result.
+  const live = (e) => e.method === "DStateGet" && Array.isArray(e.result);
+  const first = recorder.entries.slice(-50).find(live) || (await recorder.waitFor(live, { timeout: 30000 }).catch(() => null));
+  // A failed DLicenseCheck makes the web app drop the device session at once.
+  const lic = recorder.entries.slice(-80).find((e) => e.method === "DLicenseCheck" && e.error);
+  if (lic) throw new Error(`scanner refused the remote session: license check failed (${lic.error.message}, code ${lic.error.code}). ` +
+    "Check the scanner's licence/cloud status on the device or in the grundium.net portal; nothing the CLI can do.");
+  if (!first) {
+    const nulls = recorder.entries.filter((e) => /^D[A-Z]/.test(e.method) && e.result === null).length;
+    throw new Error(`device UI loaded (${page.url()}) but the scanner did not answer (${nulls} device calls returned nothing). ` +
+      "It may be offline, busy, or another session on this account may be connected. Try again in a minute.");
+  }
+  return url;
+}
+
+async function reachDeviceUi(page, recorder, { device, timeout }) {
 
   const devices = await listDevices(page, recorder);
   const target = pick(devices, device);
@@ -73,15 +91,18 @@ export async function dismissDialogs(page) {
  * result[0] = array of records {ImageUUID, DisplayName, TimeStamp, Date, Time, UserName, Size, Status, ...}.
  */
 export async function listImages(page, recorder, { timeout = 60000 } = {}) {
-  const since = Date.now();
   // Do not wait for network idle: the archive loads hundreds of thumbnails. The listing
   // itself arrives in the first DStorageQuery reply, which is all we need.
-  const pending = recorder.waitFor("DStorageQuery", { timeout }).catch(() => null);
-  await page.goto(`${deviceUiBase(page)}/archive`, { waitUntil: "domcontentloaded", timeout });
-  let entry = recorder.find("DStorageQuery", since) || (await pending);
-  await dismissDialogs(page);
-  if (!entry) { warn("archive view made no DStorageQuery call"); return []; }
-  return Array.isArray(entry.result?.[0]) ? entry.result[0] : [];
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const since = Date.now();
+    const pending = recorder.waitFor("DStorageQuery", { timeout: attempt === 1 ? 30000 : timeout }).catch(() => null);
+    await page.goto(`${deviceUiBase(page)}/archive`, { waitUntil: "domcontentloaded", timeout });
+    await dismissDialogs(page);
+    const entry = recorder.find("DStorageQuery", since) || (await pending);
+    if (entry && Array.isArray(entry.result?.[0])) return entry.result[0];
+    warn("archive view made no DStorageQuery call", { attempt, url: page.url() });
+  }
+  throw new Error("could not read the scan archive (no DStorageQuery reply); manifest left unchanged");
 }
 
 /** Scanner storage: [imageCount, usedBytes, freeBytes]. */

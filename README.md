@@ -48,6 +48,7 @@ GrundiumGrab download --limit 2             # at most two files this run
 GrundiumGrab export --dry-run --limit 5     # preview which scans would be exported
 GrundiumGrab export --name N14-JM --limit 1 # ask the scanner to export one scan
 GrundiumGrab export --limit 3 --download    # export three, wait, download them, update csv
+GrundiumGrab export --selected --download   # export every row marked with x in scans.csv
 GrundiumGrab run --interval 0               # one refresh + download cycle, for cron
 GrundiumGrab run                            # keep running on the configured interval
 GrundiumGrab status                         # counts per status
@@ -57,6 +58,19 @@ Scan statuses: `not_exported` → `exporting` → `downloadable` → `downloaded
 (plus `failed`, `not_exportable` and `gone`). A scan lives on the scanner in its own format;
 **export** asks the scanner to write an SVS/TIFF copy, and only that copy can be downloaded.
 `export` starts exports, `download` fetches finished ones, `export --download` does both.
+
+## Batch export from the CSV
+
+`scans.csv` has a `select` column. Open the file in Excel or Numbers, put an `x` in that
+column for every scan you want, save it as CSV, then:
+
+```bash
+GrundiumGrab export --selected --download   # export all marked scans, wait, download, update csv
+GrundiumGrab list --cached --selected       # see what is marked
+```
+
+Marks are matched by the `uuid` column and are kept across refreshes, so editing the
+file once is enough. A mark is cleared automatically when the scan is downloaded.
 
 ## How export works
 

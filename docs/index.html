@@ -419,6 +419,7 @@ rm -rf ~/slides/downloads           # the slide files, only if you do not want t
 <ul>
   <li><strong>Missing file:</strong> noticed by every refresh (<code>list</code>, <code>download</code>, <code>run</code>) and by <code>verify</code>. The scan goes back to <code>downloadable</code> if its export still exists on the scanner, else to <code>not_exported</code>, with <code>last_error</code> naming the missing path.</li>
   <li><strong>Damaged file</strong> (wrong size, bad header, or a failing <code>tiffinfo</code> with <code>--deep</code>): noticed by <code>verify</code>, which marks the scan <code>failed</code>.</li>
+  <li><strong>Unmounted drive:</strong> <code>init</code> writes a small <code>.grundium-store</code> file into the download folder. When it is missing, for example because an external drive is not mounted, <code>verify</code>, <code>download</code> and <code>run</code> stop with a message instead of treating every file as lost. Do not delete that file; if the folder really is the right one, run <code>GrundiumGrab init</code> again to recreate it (your settings are kept).</li>
   <li><strong>Repair:</strong> <code>download</code> re-fetches anything with an export; <code>export --download</code> re-exports the rest. A <code>run</code> loop with <code>autoExport</code> does both on its own. As long as the scan is still on the scanner the file can always be rebuilt.</li>
 </ul>
 

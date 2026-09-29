@@ -92,11 +92,20 @@ export async function listImages(page, recorder, { timeout = 60000 } = {}) {
   for (let attempt = 1; attempt <= 2; attempt++) {
     const since = Date.now();
     const pending = recorder.waitFor("DStorageQuery", { timeout: attempt === 1 ? 30000 : timeout }).catch(() => null);
-    await page.goto(`${deviceUiBase(page)}/archive`, { waitUntil: "domcontentloaded", timeout });
+    await dismissDialogs(page);
+    // Prefer in-app navigation (the "Scan archive" tab): a full page load re-runs the device
+    // login, which the device rejects while someone is using the microscope view. Fall back
+    // to loading the archive URL only when the tab is not there.
+    const clicked = await page.evaluate(() => {
+      const a = [...document.querySelectorAll("a.gs-toolbar-top-nav-item")].find((x) => /scan archive/i.test(x.textContent));
+      if (!a) return false; a.click(); return true;
+    });
+    if (!clicked) await page.goto(`${deviceUiBase(page)}/archive`, { waitUntil: "domcontentloaded", timeout });
+    await sleep(500);
     await dismissDialogs(page);
     const entry = recorder.find("DStorageQuery", since) || (await pending);
     if (entry && Array.isArray(entry.result?.[0])) return entry.result[0];
-    warn("archive view made no DStorageQuery call", { attempt, url: page.url() });
+    warn("archive view made no DStorageQuery call", { attempt, clicked, url: page.url() });
   }
   throw new Error("could not read the scan archive (no DStorageQuery reply); manifest left unchanged");
 }

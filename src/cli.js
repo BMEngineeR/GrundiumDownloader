@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import readline from "node:readline";
 import { Command } from "commander";
 import { PROJECT_FILE, initProject, loadProject, credentialsFor } from "./config.js";
 import { saveCredentials, hasCredentials } from "./secrets.js";
@@ -11,24 +10,12 @@ import { fetchExport, verifyFile, probe } from "./download.js";
 import { Manifest } from "./manifest.js";
 import { toCsv, toTable, COLUMNS } from "./csv.js";
 import { info, warn, error, sleep } from "./log.js";
+import { ask } from "./prompt.js";
 
 const program = new Command();
 program.name("GrundiumGrab").description("Grab / check / download loop for Grundium Ocus scans").version("0.2.0");
 
 // ---------- helpers ----------
-
-function ask(question, { hidden = false } = {}) {
-  return new Promise((resolve) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-    if (hidden) {
-      process.stdout.write(question);
-      const onData = (ch) => { const c = String(ch); if (c === "\n" || c === "\r") process.stdin.removeListener("data", onData); };
-      rl._writeToOutput = () => {};
-      process.stdin.on("data", onData);
-    }
-    rl.question(hidden ? "" : question, (a) => { rl.close(); if (hidden) process.stdout.write("\n"); resolve(a.trim()); });
-  });
-}
 
 /** Open a browser, log in, and connect to the configured scanner. Caller must close(). */
 async function openScanner(cfg, { capture = true } = {}) {
@@ -107,9 +94,16 @@ program.command("init [dir]")
     const root = path.resolve(dir || ".");
     const cfg = initProject(root, { device: opts.device || "", dest: opts.dest, format: opts.format.toUpperCase() });
     let { username, password } = opts;
-    if (!username && !hasCredentials(cfg.stateDir)) username = process.env.GRUNDIUM_USERNAME || (await ask("grundium.net email: "));
-    if (username && !password) password = process.env.GRUNDIUM_PASSWORD || (await ask("password: ", { hidden: true }));
-    if (username && password) { saveCredentials(cfg.stateDir, { username, password }); info("credentials saved", { file: path.join(cfg.stateDir, "credentials.enc"), protection: process.env.GRUNDIUM_PASSPHRASE ? "passphrase" : "key file" }); }
+    const stored = hasCredentials(cfg.stateDir);
+    if (!username && !stored) username = process.env.GRUNDIUM_USERNAME || (await ask("grundium.net email: "));
+    if (username && !password) password = process.env.GRUNDIUM_PASSWORD || (await ask("password (not echoed): ", { hidden: true }));
+    if (username) {
+      if (!password) throw new Error("No password entered; credentials not saved. Run \"GrundiumGrab init\" again.");
+      saveCredentials(cfg.stateDir, { username, password });
+      info("credentials saved", { username, file: path.join(cfg.stateDir, "credentials.enc"), protection: process.env.GRUNDIUM_PASSPHRASE ? "passphrase" : "key file" });
+    } else if (stored) {
+      info("keeping existing credentials", { file: path.join(cfg.stateDir, "credentials.enc") });
+    }
     info("project ready", { root, config: path.join(root, PROJECT_FILE), dest: cfg.dest });
   });
 
@@ -122,7 +116,8 @@ config.command("show").action(() => {
 config.command("credentials").description("Replace the stored username/password").action(async () => {
   const cfg = loadProject();
   const username = process.env.GRUNDIUM_USERNAME || (await ask("grundium.net email: "));
-  const password = process.env.GRUNDIUM_PASSWORD || (await ask("password: ", { hidden: true }));
+  const password = process.env.GRUNDIUM_PASSWORD || (await ask("password (not echoed): ", { hidden: true }));
+  if (!username || !password) throw new Error("Email and password are both required; nothing saved.");
   saveCredentials(cfg.stateDir, { username, password });
   info("credentials saved");
 });

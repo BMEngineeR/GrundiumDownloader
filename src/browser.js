@@ -157,7 +157,7 @@ export async function screenshot(page, dir, name) {
  * Success is a navigation to /scopes (device picker) or to /v<ver>/ (device UI).
  */
 export async function login(page, { baseUrl, username, password }, { recorder, timeout = 45000 } = {}) {
-  await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle2", timeout });
+  await page.goto(`${baseUrl}/login`, { waitUntil: "domcontentloaded", timeout });
   await page.waitForSelector('input[name="username"]', { visible: true, timeout });
   await page.click('input[name="username"]', { clickCount: 3 });
   await page.type('input[name="username"]', username, { delay: 10 });

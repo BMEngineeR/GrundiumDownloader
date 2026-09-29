@@ -74,10 +74,12 @@ export async function dismissDialogs(page) {
  */
 export async function listImages(page, recorder, { timeout = 60000 } = {}) {
   const since = Date.now();
-  await page.goto(`${deviceUiBase(page)}/archive`, { waitUntil: "networkidle2", timeout });
+  // Do not wait for network idle: the archive loads hundreds of thumbnails. The listing
+  // itself arrives in the first DStorageQuery reply, which is all we need.
+  const pending = recorder.waitFor("DStorageQuery", { timeout }).catch(() => null);
+  await page.goto(`${deviceUiBase(page)}/archive`, { waitUntil: "domcontentloaded", timeout });
+  let entry = recorder.find("DStorageQuery", since) || (await pending);
   await dismissDialogs(page);
-  let entry = recorder.find("DStorageQuery", since);
-  if (!entry) entry = await recorder.waitFor("DStorageQuery", { timeout }).catch(() => null);
   if (!entry) { warn("archive view made no DStorageQuery call"); return []; }
   return Array.isArray(entry.result?.[0]) ? entry.result[0] : [];
 }

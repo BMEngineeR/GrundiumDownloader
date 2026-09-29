@@ -24,8 +24,8 @@ GrundiumGrab login
 # 4. Inventory the scanner -> scans.csv
 GrundiumGrab list
 
-# 5. Pick a scan, ask the scanner to export it, wait, download it
-GrundiumGrab export --name <part of the scan name> --download
+# 5. Pick scans in a browser window, export them, wait, download them
+GrundiumGrab export
 
 # 6. Later: download anything else that has a finished export
 GrundiumGrab download
@@ -34,8 +34,10 @@ GrundiumGrab download
 GrundiumGrab verify
 ```
 
-Step 5 is the one that makes files: a scan can only be downloaded after the scanner has
-exported it. Use `--limit 3` instead of `--name` to export the three newest scans.
+Step 5 opens a page in your browser listing every scan with checkboxes, search and a
+size total. Tick what you want, press Start, and the terminal does the rest. It is the
+step that makes files: a scan can only be downloaded after the scanner has exported it.
+Prefer the command line? `GrundiumGrab export --name <text> --download` or `--limit 3`.
 
 Chrome for Testing (about 350 MB) is downloaded automatically on the first browser command.
 
@@ -45,6 +47,7 @@ Chrome for Testing (about 350 MB) is downloaded automatically on the first brows
 GrundiumGrab list --status downloadable     # what is ready right now
 GrundiumGrab list --name GBM -f csv         # filter, print CSV
 GrundiumGrab download --limit 2             # at most two files this run
+GrundiumGrab export                         # choose scans in a browser window, then export + download
 GrundiumGrab export --dry-run --limit 5     # preview which scans would be exported
 GrundiumGrab export --name N14-JM --limit 1 # ask the scanner to export one scan
 GrundiumGrab export --limit 3 --download    # export three, wait, download them, update csv
@@ -70,7 +73,9 @@ GrundiumGrab list --cached --selected       # see what is marked
 ```
 
 Marks are matched by the `uuid` column and are kept across refreshes, so editing the
-file once is enough. A mark is cleared automatically when the scan is downloaded.
+file once is enough. A mark is cleared automatically when the scan is downloaded. The file
+can stay open in a spreadsheet while a command runs: each command backs it up to
+`.grundium/scans.backup.csv` first and merges your marks back when it finishes.
 
 ## How export works
 

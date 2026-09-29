@@ -11,6 +11,7 @@ import { Manifest } from "./manifest.js";
 import { toCsv, toTable, COLUMNS } from "./csv.js";
 import { info, warn, error, sleep } from "./log.js";
 import { ask } from "./prompt.js";
+import { pickScans } from "./picker.js";
 
 const program = new Command();
 program.name("GrundiumGrab").description("Grab / check / download loop for Grundium Ocus scans").version("0.2.0");
@@ -38,6 +39,7 @@ async function openScanner(cfg, { capture = true } = {}) {
 
 /** Refresh the manifest from the live archive. Returns the scanner session (still open). */
 async function refresh(cfg, manifest) {
+  backupCsv(cfg);
   const s = await openScanner(cfg);
   const images = await listImages(s.page, s.recorder);
   const exports = exportsState(s.recorder);
@@ -48,13 +50,35 @@ async function refresh(cfg, manifest) {
 }
 
 function csvPath(cfg) { return path.join(cfg.root, "scans.csv"); }
+function csvBackupPath(cfg) { return path.join(cfg.stateDir, "scans.backup.csv"); }
 
-/** Rewrite scans.csv, first absorbing any "select" marks the user put in it. */
-function writeCsv(cfg, manifest) {
+/**
+ * Keep a copy of scans.csv while a command runs. The user may have the file open in a
+ * spreadsheet at the same time; if it is later missing or unreadable, the marks are
+ * recovered from this copy. Called once at the start of every command that rewrites the CSV.
+ */
+function backupCsv(cfg) {
   const file = csvPath(cfg);
-  const n = manifest.syncSelectionFromCsv(file);
-  if (n) info("selection marks read from scans.csv", { changed: n, selected: manifest.selected().length });
-  fs.writeFileSync(file, toCsv(manifest.rows()));
+  if (!fs.existsSync(file)) return;
+  fs.copyFileSync(file, csvBackupPath(cfg));
+}
+
+/**
+ * Rewrite scans.csv: merge the "select" marks from the file on disk (the user's latest
+ * edits), falling back to the backup copy when the file is gone or unparsable, then
+ * write the tool's current statuses. The backup is kept until the next command.
+ */
+function writeCsv(cfg, manifest, { merge = true } = {}) {
+  const file = csvPath(cfg);
+  let n = 0, source = "scans.csv";
+  if (!merge) { fs.writeFileSync(file + ".tmp", toCsv(manifest.rows())); fs.renameSync(file + ".tmp", file); return file; }
+  try { n = manifest.syncSelectionFromCsv(file); }
+  catch (e) { warn("scans.csv unreadable, using backup marks", { err: String(e.message || e) }); source = "backup"; n = manifest.syncSelectionFromCsv(csvBackupPath(cfg)); }
+  if (!fs.existsSync(file) && fs.existsSync(csvBackupPath(cfg))) { source = "backup"; n = manifest.syncSelectionFromCsv(csvBackupPath(cfg)); }
+  if (n) info("selection marks merged", { from: source, changed: n, selected: manifest.selected().length });
+  const tmp = file + ".tmp";
+  fs.writeFileSync(tmp, toCsv(manifest.rows()));
+  fs.renameSync(tmp, file);
   return file;
 }
 
@@ -196,9 +220,26 @@ program.command("export")
   .option("--dry-run", "only show what would be exported")
   .option("-w, --wait", "stay connected until the exports finish, then mark them downloadable")
   .option("-d, --download", "implies --wait; download the files as soon as they are ready")
+  .option("--pick", "choose scans in a browser window (default when no filter is given)")
+  .option("--no-browser", "with --pick: print the picker URL instead of opening a browser")
   .action(async (opts) => {
     const cfg = loadProject();
     const manifest = new Manifest(cfg.stateDir);
+    const noFilter = !opts.name && !opts.uuid && !opts.selected && opts.limit === undefined && !opts.dryRun;
+    if (opts.pick || noFilter) {
+      // Pick from the cached inventory so no scanner session is held open while the user thinks.
+      if (!manifest.all().length) { const s0 = await refresh(cfg, manifest); await s0.close(); }
+      else manifest.syncSelectionFromCsv(csvPath(cfg));
+      backupCsv(cfg);
+      const choice = await pickScans(manifest.rows(), { openBrowser: opts.browser !== false });
+      if (!choice || !choice.uuids.length) { writeCsv(cfg, manifest); info("nothing chosen; no export started"); return; }
+      for (const r of manifest.all()) r.selected = choice.uuids.includes(r.uuid);
+      manifest.save();
+      writeCsv(cfg, manifest, { merge: false });   // the picker's choice wins over stale marks in the file
+      opts.selected = true;
+      if (choice.download) opts.download = true;
+      info("chosen in picker", { scans: choice.uuids.length, download: !!choice.download });
+    }
     const s = await refresh(cfg, manifest);
     const started = [];
     try {
@@ -233,10 +274,12 @@ program.command("export")
       }
       writeCsv(cfg, manifest);
     } finally { await s.close(); }
-    if (opts.download && started.length) {
-      // only the scans this command exported, never everything that happens to be downloadable
-      const summary = await downloadReady(cfg, manifest, { uuids: new Set(started.map((r) => r.uuid)) });
-      info("download finished", summary);
+    if (opts.download) {
+      // Only the scans this command exported (plus, with --selected, marked ones already
+      // downloadable). Never everything that happens to be downloadable.
+      const uuids = new Set(started.map((r) => r.uuid));
+      if (opts.selected) manifest.selected().filter((r) => r.status === "downloadable" || r.status === "failed").forEach((r) => uuids.add(r.uuid));
+      if (uuids.size) info("download finished", await downloadReady(cfg, manifest, { uuids }));
     }
     console.log(JSON.stringify(manifest.summary()));
   });
@@ -247,6 +290,7 @@ program.command("verify")
   .action(async (opts) => {
     const cfg = loadProject();
     const manifest = new Manifest(cfg.stateDir);
+    backupCsv(cfg);
     const report = { ok: [], broken: [], missing: [], not_downloaded: [] };
     for (const rec of manifest.rows()) {
       if (rec.status !== "downloaded") { report.not_downloaded.push(rec); continue; }

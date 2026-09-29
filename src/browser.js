@@ -1,9 +1,63 @@
 import fs from "node:fs";
 import path from "node:path";
+import childProcess from "node:child_process";
 import puppeteer from "puppeteer";
+import { install, Browser } from "@puppeteer/browsers";
 import { info, warn } from "./log.js";
 
+/** True when the Chrome build is fully extracted (on macOS the app bundle must carry its framework). */
+function chromeComplete(exe) {
+  if (!fs.existsSync(exe)) return false;
+  if (process.platform === "darwin") {
+    return fs.existsSync(path.resolve(exe, "../../Frameworks/Google Chrome for Testing Framework.framework"));
+  }
+  return true;
+}
+
+function hasSystemUnzip() {
+  const { spawnSync } = childProcess;
+  return spawnSync("unzip", ["-v"], { stdio: "ignore" }).status === 0;
+}
+
+/**
+ * Make sure the pinned Chrome for Testing build is present and complete.
+ * npm may block puppeteer's postinstall script (global installs, --ignore-scripts), and
+ * puppeteer's JavaScript unzip mishandles the symlinks inside the macOS app bundle and
+ * leaves a 400 KB stub. So: download the archive, extract it with the system unzip when
+ * one exists, and verify the result before letting Chrome launch.
+ */
+export async function ensureChrome() {
+  const exe = puppeteer.executablePath();
+  if (chromeComplete(exe)) return exe;
+  const cacheDir = puppeteer.configuration.cacheDirectory;
+  const buildId = puppeteer.defaultBrowserRevision;
+  const versionDir = path.resolve(exe, process.platform === "darwin" ? "../../../../.." : "../..");
+  if (fs.existsSync(versionDir)) {
+    warn("removing incomplete Chrome folder", { dir: versionDir });
+    fs.rmSync(versionDir, { recursive: true, force: true });
+  }
+  const useSystemUnzip = hasSystemUnzip();
+  info("downloading Chrome for Testing", { buildId, cacheDir, extractor: useSystemUnzip ? "unzip" : "built-in" });
+  let last = 0;
+  const progress = (done, total) => {
+    const pct = Math.floor((done / total) * 100);
+    if (pct >= last + 25) { last = pct; info("chrome download", { pct }); }
+  };
+  if (useSystemUnzip) {
+    const archive = await install({ browser: Browser.CHROME, buildId, cacheDir, unpack: false, downloadProgressCallback: progress });
+    fs.mkdirSync(versionDir, { recursive: true });
+    childProcess.execFileSync("unzip", ["-q", "-o", archive, "-d", versionDir], { stdio: "inherit" });
+    fs.rmSync(archive, { force: true });
+  } else {
+    await install({ browser: Browser.CHROME, buildId, cacheDir, downloadProgressCallback: progress });
+  }
+  if (!chromeComplete(exe)) throw new Error(`Chrome is incomplete at ${exe}. Delete ${versionDir} and run "GrundiumGrab setup" again, or install unzip.`);
+  info("chrome ready", { exe });
+  return exe;
+}
+
 export async function launchBrowser({ headless = true } = {}) {
+  await ensureChrome();
   return puppeteer.launch({
     headless,
     args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],

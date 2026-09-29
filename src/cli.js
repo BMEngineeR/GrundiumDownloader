@@ -5,7 +5,7 @@ import readline from "node:readline";
 import { Command } from "commander";
 import { PROJECT_FILE, initProject, loadProject, credentialsFor } from "./config.js";
 import { saveCredentials, hasCredentials } from "./secrets.js";
-import { launchBrowser, RpcRecorder, login, screenshot } from "./browser.js";
+import { launchBrowser, RpcRecorder, login, screenshot, ensureChrome } from "./browser.js";
 import { listDevices, connectDevice, listImages, exportsState, storageStatus, deviceState, triggerExport } from "./scanner.js";
 import { fetchExport, verifyFile, probe } from "./download.js";
 import { Manifest } from "./manifest.js";
@@ -133,6 +133,10 @@ config.command("set <key> <value>").description("Set a grundium.json key (device
   raw[key] = /^(true|false)$/.test(value) ? value === "true" : /^\d+(\.\d+)?$/.test(value) ? Number(value) : value;
   fs.writeFileSync(file, JSON.stringify(raw, null, 2) + "\n");
   info("updated", { [key]: raw[key] });
+});
+
+program.command("setup").description("Download the Chrome build the tool needs (runs automatically on first use)").action(async () => {
+  console.log(await ensureChrome());
 });
 
 program.command("login").description("Check credentials and list scanners on the account").action(async () => {

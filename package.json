@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "commander": "^13.1.0",
-    "puppeteer": "^24.10.0"
+    "puppeteer": "^24.10.0",
+    "@puppeteer/browsers": "^2.10.0"
   }
 }

@@ -39,12 +39,20 @@ human-readable view of that manifest and is rewritten after every refresh.
 
 ## Install
 
+One command, straight from GitHub:
+
 ```bash
-git clone https://github.com/BMEngineeR/GrundiumDownloader.git
-cd GrundiumDownloader
-npm install          # also downloads Chrome for Testing
-npm link             # makes the global "GrundiumGrab" command (or: npm install -g .)
+npm install -g github:BMEngineeR/GrundiumDownloader
 ```
+
+That gives you the global `GrundiumGrab` command. Chrome for Testing (about 350 MB) is
+downloaded on first use, or explicitly with `GrundiumGrab setup`. This works even when npm
+refuses to run install scripts for global packages, which recent npm versions do.
+
+Requires Node.js 20 or newer. On Linux servers also install `unzip` and the usual Chrome
+runtime libraries (`apt-get install -y unzip libnss3 libatk-bridge2.0-0 libgbm1 libasound2`).
+
+For development, clone the repo and run `npm install && npm link` instead.
 
 ## Quick start
 
@@ -71,6 +79,11 @@ present as `GRUNDIUM_USERNAME` / `GRUNDIUM_PASSWORD` in the environment.
 
 Options: `--device <name>` (substring of the scanner name when the account has several),
 `--dest <dir>` (download folder, default `downloads`), `--format SVS|TIFF`.
+
+### `setup`
+
+Downloads Chrome for Testing into `~/.cache/puppeteer` if it is missing or incomplete.
+Every browser command does this check on its own, so `setup` is only for doing it up front.
 
 ### `login`
 
@@ -241,12 +254,9 @@ src/
 
 ## Troubleshooting
 
-**Chrome fails to launch with `dlopen ... Framework`.** The bundled browser was downloaded
-but not extracted. Re-extract it:
-
-```bash
-cd ~/.cache/puppeteer/chrome && rm -rf mac_arm-* && mkdir mac_arm-<ver> && unzip -q *.zip -d mac_arm-<ver>
-```
+**Chrome fails to launch with `dlopen ... Framework`.** The browser bundle is incomplete.
+Delete `~/.cache/puppeteer/chrome` and run `GrundiumGrab setup`, which re-downloads and
+extracts it with the system unzip.
 
 **`Login failed: Function returned non-zero`.** Wrong email or password. Run
 `GrundiumGrab config credentials`.

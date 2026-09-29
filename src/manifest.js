@@ -42,6 +42,9 @@ export class Manifest {
     const readyByName = new Map();
     for (const c of exports.completed || []) if (c.URL && nameOf(c)) readyByName.set(nameOf(c), c);
     const busyNames = new Set([...(exports.ongoing || [])].map(nameOf).filter(Boolean));
+    // If the download folder itself is missing (e.g. an unplugged drive), say nothing about
+    // local files rather than declaring every one of them lost.
+    const destOk = !dest || fs.existsSync(dest);
     const seen = new Set();
     for (const img of images) {
       const uuid = img.ImageUUID;
@@ -52,7 +55,7 @@ export class Manifest {
         user: img.UserName, size_bytes: img.Size, size_gb: (img.Size / 1e9).toFixed(2),
       };
       const ready = readyByName.get(img.DisplayName);
-      const localGone = cur?.status === "downloaded" && cur.local_path && !fs.existsSync(cur.local_path);
+      const localGone = destOk && cur?.status === "downloaded" && cur.local_path && !fs.existsSync(cur.local_path);
       if (localGone) {
         // The file vanished from disk: fall back to re-download or re-export on the next cycle.
         Object.assign(patch, ready
@@ -82,9 +85,14 @@ export class Manifest {
     }
     for (const rec of this.all()) {
       if (seen.has(rec.uuid)) continue;
+      // A lost local copy that is back (drive re-mounted, file restored): downloaded again.
+      if (rec.status === "gone" && rec.lost_local_path && fs.existsSync(rec.lost_local_path)) {
+        Object.assign(rec, { status: "downloaded", local_path: rec.lost_local_path, lost_local_path: "", gone_at: "", last_error: "" });
+        continue;
+      }
       if (rec.status === "downloaded") {
         // Deleted on the scanner but kept locally: only flag it if the local copy is gone too.
-        if (rec.local_path && !fs.existsSync(rec.local_path)) {
+        if (destOk && rec.local_path && !fs.existsSync(rec.local_path)) {
           rec.status = "gone";
           rec.gone_at = new Date().toISOString();
           rec.lost_local_path = rec.local_path;   // kept separately; last_error is rewritten below

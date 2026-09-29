@@ -107,49 +107,103 @@ export function exportsState(recorder) {
 }
 
 /**
- * Trigger an export for one image from the archive page. UNTESTED against a live device:
- * written from the page layout (search box, card checkbox, right-hand "Export" button).
+ * Trigger an export for one image from the archive page. Flow, with a check at every step:
+ *   search the name -> clear any remembered selection -> tick the one card -> confirm the
+ *   side panel shows that image -> press Export -> read the "Export image." dialog ->
+ *   Cancel if the scanner says it cannot be exported, else Confirm and wait for DExportStart.
  * Uses whatever export recipe the account last saved (destination WebDL, format SVS/TIFF).
- * Resolves with the DExportStart reply, or throws if no such call was observed.
+ * Resolves {started:true, result} or {started:false, reason}.
  */
 export async function triggerExport(page, recorder, image, { timeout = 30000 } = {}) {
   await dismissDialogs(page);
-  // 1. Filter the grid down to this image.
-  const search = await page.$('input[placeholder="Search..."], input[type="search"]');
+  const header = () => page.evaluate(() => document.querySelector(".al-grid-header-selection-label")?.textContent.trim() || "");
+  const panelInputs = () => page.evaluate(() => [...document.querySelectorAll("input")].map((i) => i.value));
+  const clickButton = (label) => page.evaluate((t) => {
+    const b = [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === t && !x.disabled && x.offsetParent !== null);
+    if (!b) return false; b.click(); return true;
+  }, label);
+
+  // 1. Filter the grid to this image.
+  const search = await page.$('input[placeholder="Search..."]');
   if (!search) throw new Error("archive search box not found");
   await search.click({ clickCount: 3 });
   await search.type(image.name, { delay: 5 });
   await sleep(1500);
-  // 2. Select exactly that card. Cards show the display name; the checkbox sits at the top left.
-  const selected = await page.evaluate((name) => {
-    const boxes = [...document.querySelectorAll("mat-checkbox")];
-    // clear existing selection
-    for (const b of boxes) if (b.classList.contains("mat-checkbox-checked")) b.querySelector("input,label")?.click();
-    const cards = [...document.querySelectorAll("mat-checkbox")].map((b) => b.closest("li, .al-grid-li, [class*='grid-li']") || b.parentElement);
-    const card = cards.find((c) => c && c.textContent.includes(name));
-    if (!card) return false;
-    card.querySelector("mat-checkbox input, mat-checkbox label")?.click();
-    return true;
-  }, image.name);
-  if (!selected) throw new Error(`card for "${image.name}" not found after search`);
-  await sleep(800);
-  // 3. Press Export in the side panel, then confirm if a dialog asks.
+
+  // 2. Clear the selection the app remembers from earlier sessions. The header checkbox
+  //    toggles select-all / select-none, so click until the label reads "0 of N".
+  for (let i = 0; i < 3 && !/^0 of/.test(await header()); i++) {
+    await page.evaluate(() => document.querySelector(".al-grid-header-selection mat-checkbox label")?.click());
+    await sleep(800);
+  }
+  if (!/^0 of/.test(await header())) throw new Error(`could not clear selection (header: ${await header()})`);
+
+  // 3. Tick the single card left by the search and verify the side panel shows it.
+  const ticked = await page.evaluate(() => {
+    const boxes = [...document.querySelectorAll("mat-checkbox")].filter((b) => !b.closest(".al-grid-header-selection"));
+    if (boxes.length !== 1) return boxes.length;
+    boxes[0].querySelector("label").click();
+    return 1;
+  });
+  if (ticked !== 1) throw new Error(`expected exactly one card after search, found ${ticked}`);
+  await sleep(1200);
+  const h = await header();
+  if (!/^1 of/.test(h) || !(await panelInputs()).includes(image.name)) {
+    throw new Error(`selection check failed (header: ${h}); refusing to press Export`);
+  }
+
+  // 4. Press Export. A real scan starts at once (DExportStart goes out, no dialog);
+  //    an overview-only capture pops an "Export image." dialog saying it cannot be exported.
   const since = Date.now();
-  const pressed = await page.evaluate(() => {
-    const btn = [...document.querySelectorAll("button.grund-button")].find((b) => b.textContent.trim() === "Export" && !b.disabled);
-    if (!btn) return false;
-    btn.click();
-    return true;
-  });
-  if (!pressed) throw new Error("Export button not found or disabled");
-  await sleep(1000);
-  await page.evaluate(() => {
-    const ok = [...document.querySelectorAll("mat-dialog-container button, .cdk-overlay-container button")]
-      .find((b) => /^(ok|export|start|yes)$/i.test(b.textContent.trim()));
-    ok?.click();
-  });
-  const call = recorder.find("DExportStart", since) || (await recorder.waitFor("DExportStart", { timeout }));
+  if (!(await clickButton("Export"))) throw new Error("Export button not found or disabled");
+  let dialog = "", call = null;
+  for (let i = 0; i < 20 && !dialog && !call; i++) {
+    await sleep(500);
+    call = recorder.find("DExportStart", since);
+    if (call) break;
+    dialog = await page.evaluate(() => {
+      const el = [...document.querySelectorAll("*")].find((e) => e.childElementCount === 0 && /^Export image\.?$/.test(e.textContent.trim()));
+      let card = el;
+      for (let i = 0; card && i < 10 && !/Confirm|Cancel/.test(card.innerText || ""); i++) card = card.parentElement;
+      return card ? card.innerText.replace(/\s+/g, " ").trim() : "";
+    });
+  }
+  if (!call && !dialog) throw new Error("nothing happened after pressing Export (no DExportStart, no dialog)");
+  if (dialog && /can ?not be exported|cannot be exported/i.test(dialog)) {
+    await clickButton("Cancel");
+    return { started: false, reason: dialog.replace(/^(cancel\s*)?Export image\.?\s*/i, "").replace(/\s*(Confirm|Cancel)\s*/g, " ").trim() };
+  }
+  if (dialog) {
+    if (!(await clickButton("Confirm"))) throw new Error(`export dialog without Confirm button: ${dialog}`);
+  }
+  call = call || recorder.find("DExportStart", since) || (await recorder.waitFor("DExportStart", { timeout }));
   info("export requested", { name: image.name, params: call.params, result: call.result, error: call.error });
   if (call.error) throw new Error(`DExportStart failed: ${call.error.message}`);
-  return call.result;
+  if (Array.isArray(call.result) && call.result[0] !== 0) throw new Error(`scanner rejected export (code ${call.result[0]})`);
+  return { started: true, result: call.result, exportId: call.result?.[1] };
+}
+
+/**
+ * Wait until the scanner reports a finished export for `name`. The app polls
+ * DExportStateGet while exports run; reload the archive if it goes quiet.
+ */
+export async function waitForExport(page, recorder, name, { timeoutMs = 30 * 60 * 1000 } = {}) {
+  const t0 = Date.now();
+  let lastSeen = Date.now();
+  while (Date.now() - t0 < timeoutMs) {
+    const e = recorder.find("DExportStateGet");
+    if (e && e.ts > lastSeen) lastSeen = e.ts;
+    const st = exportsState(recorder);
+    const nameOf = (d) => (d.Description?.match(/^'(.*)' to /) || [])[1];
+    const done = st.completed.find((c) => nameOf(c) === name && c.URL);
+    if (done) return { done };
+    const failed = st.failed.find((c) => nameOf(c) === name);
+    if (failed) return { failed };
+    if (Date.now() - lastSeen > 60000) {
+      await page.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
+      lastSeen = Date.now();
+    }
+    await sleep(10000);
+  }
+  throw new Error(`export of "${name}" did not finish within ${Math.round(timeoutMs / 60000)} min`);
 }

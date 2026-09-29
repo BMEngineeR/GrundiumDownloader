@@ -5,7 +5,7 @@ import { Command } from "commander";
 import { PROJECT_FILE, initProject, loadProject, credentialsFor } from "./config.js";
 import { saveCredentials, hasCredentials } from "./secrets.js";
 import { launchBrowser, RpcRecorder, login, screenshot, ensureChrome } from "./browser.js";
-import { listDevices, connectDevice, listImages, exportsState, storageStatus, deviceState, triggerExport } from "./scanner.js";
+import { listDevices, connectDevice, listImages, exportsState, storageStatus, deviceState, triggerExport, waitForExport } from "./scanner.js";
 import { fetchExport, verifyFile, probe } from "./download.js";
 import { Manifest } from "./manifest.js";
 import { toCsv, toTable, COLUMNS } from "./csv.js";
@@ -54,6 +54,7 @@ function writeCsv(cfg, manifest) {
 }
 
 function matches(rec, opts) {
+  if (opts.uuids && !opts.uuids.has(rec.uuid)) return false;
   if (opts.uuid && rec.uuid !== opts.uuid) return false;
   if (opts.name && !rec.name?.toLowerCase().includes(opts.name.toLowerCase())) return false;
   return true;
@@ -179,21 +180,25 @@ program.command("download")
   });
 
 program.command("export")
-  .description("Ask the scanner to export scans that have no export yet (changes scanner state; UNTESTED flow)")
+  .description("Ask the scanner to export scans that have no export yet, then update scans.csv (uses scanner disk)")
   .option("-n, --name <substring>").option("--uuid <uuid>").option("-l, --limit <n>", "max exports to start", (v) => parseInt(v, 10), 1)
   .option("--dry-run", "only show what would be exported")
+  .option("-w, --wait", "stay connected until the exports finish, then mark them downloadable")
+  .option("-d, --download", "implies --wait; download the files as soon as they are ready")
   .action(async (opts) => {
     const cfg = loadProject();
     const manifest = new Manifest(cfg.stateDir);
     const s = await refresh(cfg, manifest);
+    const started = [];
     try {
       const todo = manifest.rows().filter((r) => r.status === "not_exported" && matches(r, opts)).slice(0, opts.limit);
       console.log(toTable(todo));
       if (opts.dryRun || !todo.length) return;
       for (const rec of todo) {
         try {
-          const result = await triggerExport(s.page, s.recorder, rec);
-          manifest.upsert(rec.uuid, { status: "exporting", export_id: result?.[1] || "", last_error: "" });
+          const r = await triggerExport(s.page, s.recorder, rec);
+          if (r.started) { manifest.upsert(rec.uuid, { status: "exporting", export_id: r.exportId || "", last_error: "" }); started.push(rec); }
+          else { manifest.upsert(rec.uuid, { status: "not_exportable", last_error: r.reason }); warn("not exportable", { name: rec.name, reason: r.reason }); }
         } catch (e) {
           await screenshot(s.page, cfg.captureDir, "export-error").catch(() => {});
           manifest.upsert(rec.uuid, { last_error: String(e.message || e) });
@@ -201,8 +206,23 @@ program.command("export")
         }
         manifest.save();
       }
+      if ((opts.wait || opts.download) && started.length) {
+        for (const rec of started) {
+          info("waiting for export to finish", { name: rec.name });
+          const r = await waitForExport(s.page, s.recorder, rec.name);
+          if (r.done) { manifest.upsert(rec.uuid, { status: "downloadable", export_url: r.done.URL, export_id: r.done.ID }); info("export finished", { name: rec.name, url: r.done.URL }); }
+          else { manifest.upsert(rec.uuid, { status: "not_exported", last_error: "export failed on scanner: " + JSON.stringify(r.failed) }); error("export failed on scanner", { name: rec.name }); }
+          manifest.save();
+        }
+      }
       writeCsv(cfg, manifest);
     } finally { await s.close(); }
+    if (opts.download && started.length) {
+      // only the scans this command exported, never everything that happens to be downloadable
+      const summary = await downloadReady(cfg, manifest, { uuids: new Set(started.map((r) => r.uuid)) });
+      info("download finished", summary);
+    }
+    console.log(JSON.stringify(manifest.summary()));
   });
 
 program.command("verify")
@@ -258,8 +278,10 @@ program.command("run")
               const busy = manifest.byStatus("exporting").length + manifest.byStatus("downloadable").length;
               const room = Math.max(0, cfg.maxExportsPerCycle - busy);
               for (const rec of manifest.rows().filter((r) => r.status === "not_exported").slice(0, room)) {
-                try { await triggerExport(s.page, s.recorder, rec); manifest.upsert(rec.uuid, { status: "exporting" }); }
-                catch (e) { error("export failed", { name: rec.name, err: String(e.message || e) }); }
+                try {
+                  const r = await triggerExport(s.page, s.recorder, rec);
+                  manifest.upsert(rec.uuid, r.started ? { status: "exporting", export_id: r.exportId || "" } : { status: "not_exportable", last_error: r.reason });
+                } catch (e) { error("export failed", { name: rec.name, err: String(e.message || e) }); }
               }
               manifest.save();
             }

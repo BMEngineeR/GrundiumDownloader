@@ -9,6 +9,7 @@ import { verifyFile, safeName } from "./download.js";
  *   downloadable  a finished export URL exists
  *   downloaded    file on disk passed verification
  *   failed        last download/verification attempt failed (retried next time)
+ *   not_exportable the scanner refused to export it (no scanned area, e.g. overview-only captures)
  *   gone          no longer listed on the scanner (kept for history)
  */
 export class Manifest {
@@ -55,6 +56,8 @@ export class Manifest {
         Object.assign(patch, { status: "downloadable", export_url: ready.URL, export_id: ready.ID });
       } else if (busyNames.has(img.DisplayName)) {
         patch.status = "exporting";
+      } else if (cur?.status === "not_exportable") {
+        // keep
       } else if (!cur || cur.status === "downloadable" || cur.status === "exporting" || cur.status === "gone") {
         patch.status = "not_exported";
         patch.export_url = "";

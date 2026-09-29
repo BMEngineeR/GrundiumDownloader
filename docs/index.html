@@ -213,14 +213,21 @@ GrundiumGrab list --cached -f json</code></pre>
 </dl>
 
 <h3 id="cmd-export"><code>GrundiumGrab export</code> <a class="anchor" href="#cmd-export">#</a></h3>
-<p>Asks the scanner to export scans that have no export yet, using the export recipe saved on the account (destination WebDL, format SVS or TIFF). The scan then shows as <code>exporting</code> and becomes <code>downloadable</code> once the scanner finishes.</p>
+<p>Asks the scanner to export scans that have no export yet, using the export recipe saved on the account (destination WebDL, format SVS or TIFF), then rewrites <code>scans.csv</code>. A scan is stored on the device in its own format; an export is the scanner writing an SVS/TIFF copy, which takes from under a minute for a small slide to many minutes for a large one. Exported scans show as <code>exporting</code> and become <code>downloadable</code> once the scanner finishes.</p>
 <dl class="opts">
   <dt>-n, --name &lt;substring&gt;</dt><dd>Only scans whose name contains this text.</dd>
   <dt>--uuid &lt;uuid&gt;</dt><dd>Exactly one scan.</dd>
   <dt>-l, --limit &lt;n&gt;</dt><dd>Maximum number of exports to start. Default 1.</dd>
   <dt>--dry-run</dt><dd>Only print what would be exported.</dd>
+  <dt>-w, --wait</dt><dd>Stay connected until the started exports finish and mark them <code>downloadable</code>.</dd>
+  <dt>-d, --download</dt><dd>Implies <code>--wait</code>. Download the exported files as soon as they are ready and mark them <code>downloaded</code>. Only the scans this command exported are downloaded; use <code>download</code> for everything else.</dd>
 </dl>
-<div class="warn">Exporting changes scanner state and uses its disk: each export is a full copy of the slide. Start with one small scan, then check the result with <code>list</code>. The click-through flow was written from the archive page layout and has not yet been exercised on a live device.</div>
+<pre><code>GrundiumGrab export --dry-run --limit 5          # preview
+GrundiumGrab export --name N14-JM --limit 1      # start one export, come back later with "download"
+GrundiumGrab export --limit 3 --download         # export, wait, download, all in one go</code></pre>
+<p>For each scan the tool searches the archive by name, clears any selection the web app remembered from earlier sessions, ticks the one matching card, confirms that the side panel shows that scan, and only then presses Export. If any of these checks fails it refuses to press the button and records the reason in <code>last_error</code>.</p>
+<div class="warn">Each export is a full copy of the slide on the scanner's disk. Keep <code>--limit</code> small and clear finished exports on the device from time to time.</div>
+<div class="note">Overview-only captures, typically named like <code>20260610 Scanned Image 2627</code> and around 90 MB, have no scanned area. The scanner refuses to export them; the tool cancels the dialog and marks them <code>not_exportable</code> so they are not retried.</div>
 
 <h3 id="cmd-run"><code>GrundiumGrab run</code> <a class="anchor" href="#cmd-run">#</a></h3>
 <p>The scheduled loop. Each cycle: refresh the inventory, trigger exports if <code>autoExport</code> is on (at most <code>maxExportsPerCycle</code> in flight), download everything downloadable, record the results.</p>
@@ -242,6 +249,7 @@ GrundiumGrab run --interval 0    # one cycle</code></pre>
 <tr><td><code>downloadable</code></td><td>A finished export URL exists.</td><td><code>download</code> fetches it.</td></tr>
 <tr><td><code>downloaded</code></td><td>File on disk passed verification.</td><td>Nothing.</td></tr>
 <tr><td><code>failed</code></td><td>Last download or verification failed; see <code>last_error</code>.</td><td>Retried on the next <code>download</code>.</td></tr>
+<tr><td><code>not_exportable</code></td><td>The scanner refused to export it (no scanned area).</td><td>Nothing; it is skipped from now on.</td></tr>
 <tr><td><code>gone</code></td><td>No longer listed on the scanner.</td><td>Kept for history only.</td></tr>
 </table>
 
@@ -333,8 +341,8 @@ downloads/             verified slide files
 
 <h2 id="limitations">Limitations <a class="anchor" href="#limitations">#</a></h2>
 <ul>
-  <li>Tested against a live scanner: <code>init</code>, <code>login</code>, <code>list</code>, <code>download</code> (including abort, resume, verification and adoption of existing files), <code>verify</code>, <code>export --dry-run</code>, and the one-command install.</li>
-  <li>Not yet exercised on a live device: <code>export</code> without <code>--dry-run</code>, and <code>run</code> with <code>autoExport</code> enabled.</li>
+  <li>Tested against a live scanner: <code>init</code>, <code>login</code>, <code>list</code>, <code>download</code> (including abort, resume, verification and adoption of existing files), <code>verify</code>, <code>export</code> with and without <code>--download</code>, the overview-only refusal path, and the one-command install.</li>
+  <li>Not yet exercised on a live device: <code>run</code> with <code>autoExport</code> enabled (it uses the same export code as <code>export</code>).</li>
   <li>The tool relies on the grundium.net web app's internal protocol, which is not a published API. A portal update can break the listing or export steps; the captures folder is the first place to look.</li>
   <li>Exports occupy disk on the scanner. Keep <code>maxExportsPerCycle</code> small and clean up finished exports on the device from time to time.</li>
 </ul>

@@ -41,14 +41,16 @@ GrundiumGrab list --name GBM -f csv         # filter, print CSV
 GrundiumGrab download --limit 2             # at most two files this run
 GrundiumGrab export --dry-run --limit 5     # preview which scans would be exported
 GrundiumGrab export --name N14-JM --limit 1 # ask the scanner to export one scan
+GrundiumGrab export --limit 3 --download    # export three, wait, download them, update csv
 GrundiumGrab run --interval 0               # one refresh + download cycle, for cron
 GrundiumGrab run                            # keep running on the configured interval
 GrundiumGrab status                         # counts per status
 ```
 
 Scan statuses: `not_exported` → `exporting` → `downloadable` → `downloaded`
-(plus `failed` and `gone`). Scans must be exported on the scanner before they can be
-downloaded; `download` only fetches, `export` asks the scanner to make the file.
+(plus `failed`, `not_exportable` and `gone`). A scan lives on the scanner in its own format;
+**export** asks the scanner to write an SVS/TIFF copy, and only that copy can be downloaded.
+`export` starts exports, `download` fetches finished ones, `export --download` does both.
 
 ## Scheduling
 
@@ -63,8 +65,10 @@ reference, see the [documentation](https://bmengineer.github.io/GrundiumDownload
 
 - The tool only reads from the scanner unless you run `export` or set `autoExport: true`.
 - Credentials are stored AES-256-GCM encrypted in `.grundium/`. Never commit that folder.
-- `export` without `--dry-run` has not yet been exercised on a live device. Start with one
-  small scan.
+- Each export is a full copy on the scanner's disk. Export a few at a time and clear old
+  exports on the device now and then.
+- Overview-only captures (named like "20260610 Scanned Image 2627") have no scanned area;
+  the scanner refuses to export them and they are marked `not_exportable`.
 - Not affiliated with Grundium. Relies on the grundium.net web app's internal protocol.
 
 ## Development

@@ -42,9 +42,9 @@ export class Manifest {
     const readyByName = new Map();
     for (const c of exports.completed || []) if (c.URL && nameOf(c)) readyByName.set(nameOf(c), c);
     const busyNames = new Set([...(exports.ongoing || [])].map(nameOf).filter(Boolean));
-    // If the download folder itself is missing (e.g. an unplugged drive), say nothing about
-    // local files rather than declaring every one of them lost.
-    const destOk = !dest || fs.existsSync(dest);
+    // If the download folder is unavailable (unplugged drive, empty mount point), say nothing
+    // about local files rather than declaring every one of them lost.
+    const destOk = !dest || this.localStoreAvailable(dest);
     const seen = new Set();
     for (const img of images) {
       const uuid = img.ImageUUID;
@@ -109,6 +109,17 @@ export class Manifest {
     }
     this.data.updatedAt = new Date().toISOString();
     this.save();
+  }
+
+  /**
+   * The download folder is usable when it exists and, if we have downloaded files recorded
+   * in it, at least one of them is still there. All of them missing at once looks like an
+   * unmounted drive (on Linux the mount point stays as an empty directory), not deletions.
+   */
+  localStoreAvailable(dest) {
+    if (!fs.existsSync(dest)) return false;
+    const inDest = this.all().filter((r) => r.status === "downloaded" && r.local_path && r.local_path.startsWith(dest + path.sep));
+    return inDest.length === 0 || inDest.some((r) => fs.existsSync(r.local_path));
   }
 
   rows() {

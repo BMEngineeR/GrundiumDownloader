@@ -94,6 +94,19 @@ function matches(rec, opts) {
   return true;
 }
 
+/** Refuse to touch local files while the download folder looks unavailable. */
+function assertStore(cfg, manifest) {
+  if (!fs.existsSync(cfg.dest)) {
+    throw new Error(`download folder ${cfg.dest} does not exist. If it is on an external drive, mount it; ` +
+      `otherwise create it (mkdir) or run "GrundiumGrab init" again.`);
+  }
+  if (!manifest.localStoreAvailable(cfg.dest)) {
+    throw new Error(`none of the downloaded files in ${cfg.dest} can be found. If it is on an external drive, ` +
+      `mount it and try again. If the files were really deleted, remove ${path.join(cfg.stateDir, "manifest.json")} ` +
+      `entries or re-run "GrundiumGrab list" after restoring at least one file.`);
+  }
+}
+
 /** Keep a Mac awake while transfers run; no-op elsewhere. Returns a stop function. */
 function keepAwake() {
   if (process.platform !== "darwin") return () => {};
@@ -109,10 +122,7 @@ async function freshExportUrl(cfg, manifest, rec) {
 }
 
 async function downloadReady(cfg, manifest, opts = {}) {
-  if (!fs.existsSync(cfg.dest)) {
-    throw new Error(`download folder ${cfg.dest} does not exist. If it is on an external drive, mount it; ` +
-      `otherwise create it (mkdir) or run "GrundiumGrab init" again.`);
-  }
+  assertStore(cfg, manifest);
   // downloadable scans, failed ones with a URL, and deleted scans whose export file survived
   const todo = manifest.byStatus("downloadable")
     .concat(manifest.byStatus("failed").filter((r) => r.export_url))
@@ -337,6 +347,7 @@ program.command("verify")
   .action(async (opts) => {
     const cfg = loadProject();
     const manifest = new Manifest(cfg.stateDir);
+    assertStore(cfg, manifest);
     backupCsv(cfg);
     const report = { ok: [], broken: [], missing: [], not_downloaded: [] };
     for (const rec of manifest.rows()) {

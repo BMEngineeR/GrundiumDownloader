@@ -114,6 +114,14 @@ reference, see the [documentation](https://bmengineer.github.io/GrundiumDownload
   the scanner refuses to export them and they are marked `not_exportable`.
 - Not affiliated with Grundium. Relies on the grundium.net web app's internal protocol.
 
+## Uninstall
+
+```bash
+npm uninstall -g grundium-grab   # the command
+rm -rf ~/.cache/puppeteer        # the downloaded Chrome
+rm -rf ~/slides/.grundium        # a project's credentials and state; keep downloads/ if you want the files
+```
+
 ## Development
 
 ```bash

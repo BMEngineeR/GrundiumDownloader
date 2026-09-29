@@ -110,6 +110,7 @@
     <li><a href="#scheduling">Running on a schedule</a></li>
     <li><a href="#files">Files and folders</a></li>
     <li><a href="#troubleshooting">Troubleshooting</a></li>
+    <li><a href="#uninstall">Uninstalling</a></li>
     <li><a href="#limitations">Limitations</a></li>
   </ul>
   <div class="cap">Links</div>
@@ -384,6 +385,13 @@ downloads/             verified slide files
 <p><strong><code>No device matches</code>.</strong> Check the names printed by <code>GrundiumGrab login</code> and set <code>config set device &lt;substring&gt;</code>.</p>
 <p><strong><code>another instance holds the lock</code>.</strong> A previous <code>run</code> is still going, or it crashed. If no process is running, delete <code>.grundium/run.lock</code>.</p>
 <p><strong>Something else looks wrong.</strong> Run with <code>GRUNDIUM_HEADLESS=false</code> to watch the browser, and look in <code>.grundium/captures/</code> for the recorded RPC calls and screenshots of each session.</p>
+
+<h2 id="uninstall">Uninstalling <a class="anchor" href="#uninstall">#</a></h2>
+<pre><code>npm uninstall -g grundium-grab      # the command (npm unlink -g grundium-grab if installed with npm link)
+rm -rf ~/.cache/puppeteer           # the downloaded Chrome, about 350 MB
+rm -rf ~/slides/.grundium ~/slides/scans.csv ~/slides/grundium.json   # a project's settings and credentials
+rm -rf ~/slides/downloads           # the slide files, only if you do not want them</code></pre>
+<p>Nothing else is written anywhere: no system services, no shell profile changes, no keychain entries. Remove any cron line or systemd unit you created yourself.</p>
 
 <h2 id="limitations">Limitations <a class="anchor" href="#limitations">#</a></h2>
 <ul>

@@ -1,4 +1,4 @@
-# Grundium downloader
+# GrundiumGrab
 
 Periodic grab / check / download loop for whole-slide images on a Grundium Ocus scanner,
 driven through the grundium.net web portal with Puppeteer.
@@ -17,8 +17,9 @@ a human-readable `scans.csv` is rewritten after every refresh.
 
 ```bash
 npm install
-node src/cli.js init            # asks for grundium.net email + password, creates grundium.json
-node src/cli.js login           # checks the credentials, lists your scanners
+npm link            # installs the global "GrundiumGrab" command (or: npm install -g .)
+GrundiumGrab init            # asks for grundium.net email + password, creates grundium.json
+GrundiumGrab login           # checks the credentials, lists your scanners
 ```
 
 Credentials are AES-256-GCM encrypted in `.grundium/credentials.enc`. The key is a random
@@ -26,7 +27,7 @@ Credentials are AES-256-GCM encrypted in `.grundium/credentials.enc`. The key is
 derive the key from a passphrase instead, then export the same variable in the service
 unit. `GRUNDIUM_USERNAME` / `GRUNDIUM_PASSWORD` in the environment override the store.
 
-Settings are in `grundium.json` (`node src/cli.js config show` / `config set <key> <value>`):
+Settings are in `grundium.json` (`GrundiumGrab config show` / `config set <key> <value>`):
 `device`, `dest`, `format`, `intervalMinutes`, `autoExport`, `maxExportsPerCycle`, `headless`.
 
 ## Commands
@@ -46,8 +47,8 @@ Statuses in `scans.csv`: `downloadable` (finished export URL exists), `downloade
 ## Deploying
 
 ```bash
-node src/cli.js run --interval 0      # one cycle, for cron
-node src/cli.js run                   # keep running, interval from grundium.json
+GrundiumGrab run --interval 0      # one cycle, for cron
+GrundiumGrab run                   # keep running, interval from grundium.json
 ```
 
 `.grundium/run.lock` prevents overlapping instances.

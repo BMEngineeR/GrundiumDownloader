@@ -44,7 +44,7 @@ export function initProject(root, overrides = {}) {
 }
 
 export function loadProject(root = findProjectRoot()) {
-  if (!root) throw new Error(`No ${PROJECT_FILE} found here or above. Run "grundium-dl init" first.`);
+  if (!root) throw new Error(`No ${PROJECT_FILE} found here or above. Run "GrundiumGrab init" first.`);
   const raw = JSON.parse(fs.readFileSync(path.join(root, PROJECT_FILE), "utf8"));
   const cfg = { ...DEFAULTS, ...raw };
   cfg.root = root;
@@ -60,6 +60,6 @@ export function loadProject(root = findProjectRoot()) {
 
 export function credentialsFor(cfg) {
   const creds = loadCredentials(cfg.stateDir);
-  if (!creds) throw new Error('No credentials. Run "grundium-dl init" or "grundium-dl config credentials".');
+  if (!creds) throw new Error('No credentials. Run "GrundiumGrab init" or "GrundiumGrab config credentials".');
   return creds;
 }

@@ -1,16 +1,21 @@
 {
-  "name": "grundium-downloader",
+  "name": "grundium-grab",
   "version": "0.1.0",
   "description": "Periodic grab / check / download loop for Grundium Ocus scans via grundium.net, driven by Puppeteer",
   "type": "module",
-  "bin": { "grundium-dl": "./src/cli.js" },
+  "bin": {
+    "GrundiumGrab": "./src/cli.js",
+    "grundium-grab": "./src/cli.js"
+  },
   "scripts": {
     "start": "node src/cli.js",
     "login": "node src/cli.js login",
     "capture": "node src/cli.js capture",
     "run": "node src/cli.js run"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "commander": "^13.1.0",
     "puppeteer": "^24.10.0"

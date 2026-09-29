@@ -13,7 +13,7 @@ import { toCsv, toTable, COLUMNS } from "./csv.js";
 import { info, warn, error, sleep } from "./log.js";
 
 const program = new Command();
-program.name("grundium-dl").description("Grab / check / download loop for Grundium Ocus scans").version("0.2.0");
+program.name("GrundiumGrab").description("Grab / check / download loop for Grundium Ocus scans").version("0.2.0");
 
 // ---------- helpers ----------
 

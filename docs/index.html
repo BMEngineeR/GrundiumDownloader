@@ -83,6 +83,7 @@
   <ul>
     <li><a href="#overview">Overview</a></li>
     <li><a href="#how-it-works">How it works</a></li>
+    <li><a href="#export-mechanism">How export works</a></li>
     <li><a href="#install">Installation</a></li>
     <li><a href="#quick-start">Quick start</a></li>
   </ul>
@@ -136,6 +137,28 @@ GrundiumGrab download</code></pre>
 </ol>
 <p>All state is kept in a JSON manifest keyed by the scanner's image UUID. <code>scans.csv</code> is a readable view of that manifest and is rewritten after every refresh.</p>
 <div class="note">The tool only reads from the scanner unless you run <code>export</code> or enable <code>autoExport</code>. It never claims the scanner's control lock and never deletes anything on the device.</div>
+
+<h2 id="export-mechanism">How export works <a class="anchor" href="#export-mechanism">#</a></h2>
+<p>Understanding this explains why the tool has both an <code>export</code> and a <code>download</code> command.</p>
+<h3>On the scanner</h3>
+<ul>
+  <li>A scan is stored on the device as tiles in Grundium's own format, indexed by an image UUID. That is what the archive lists, and it cannot be downloaded as is.</li>
+  <li>Pressing Export in the web UI sends one command to the scanner, <code>DExportStart</code>, with the destination <em>WebDL</em> ("make it available for web download"), the format (SVS or TIFF) and the image UUID. Destination and format come from the export recipe saved on the account.</li>
+  <li>The scanner queues the job and stitches the tiles into a single file. Small slides take under a minute, large ones many minutes. It only works when the scan has a scanned area; overview-only captures have none and are refused with a dialog.</li>
+  <li>While it works, the web UI polls <code>DExportStateGet</code>, which returns the queue length, ongoing jobs with a progress fraction, completed jobs and failed jobs. A completed job carries a plain HTTPS URL on the device host that needs no login.</li>
+  <li>The exported file stays on the scanner's disk until someone deletes it from the Exports menu. Each one is a full copy, which is why free space drops as you export.</li>
+</ul>
+<h3>What GrundiumGrab does</h3>
+<ol>
+  <li>Logs in and opens the scanner's archive page in headless Chrome, the same page you would use by hand.</li>
+  <li>Types the scan name into the search box so exactly one card remains.</li>
+  <li>Clears the selection the web app remembers from earlier sessions by toggling the header checkbox until it reads "0 of N selected". Without this, Export would act on whatever was selected last time.</li>
+  <li>Ticks the one remaining card and reads the side panel to confirm it shows that scan's name. If not, it stops and records the reason.</li>
+  <li>Presses Export and watches the network for the <code>DExportStart</code> call. Result code 0 means the export started; the export ID is recorded and the scan becomes <code>exporting</code>. If the "cannot be exported" dialog appears instead, it presses Cancel and marks the scan <code>not_exportable</code>.</li>
+  <li>With <code>--wait</code> or <code>--download</code> it stays on the page and reads each <code>DExportStateGet</code> reply until the job shows up as completed with its URL. The scan becomes <code>downloadable</code>; with <code>--download</code> the file is fetched over plain HTTP, verified, and the scan becomes <code>downloaded</code>.</li>
+  <li>Rewrites <code>scans.csv</code>.</li>
+</ol>
+<p>Without <code>--wait</code> the tool exits right after step 5 and the scanner keeps working on its own. The next <code>list</code> or <code>download</code> finds the finished export in the completed list and continues from there.</p>
 
 <h2 id="install">Installation <a class="anchor" href="#install">#</a></h2>
 <p>Requires Node.js 20 or newer.</p>

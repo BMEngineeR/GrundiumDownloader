@@ -52,6 +52,24 @@ Scan statuses: `not_exported` → `exporting` → `downloadable` → `downloaded
 **export** asks the scanner to write an SVS/TIFF copy, and only that copy can be downloaded.
 `export` starts exports, `download` fetches finished ones, `export --download` does both.
 
+## How export works
+
+A scan is stored on the scanner as tiles in Grundium's own format. It can only be
+downloaded after the scanner writes an SVS/TIFF copy of it: that copy is the export.
+
+1. `export` opens the scan archive in headless Chrome, searches the scan by name, clears
+   any selection the web app remembered, ticks the one matching card, and checks that the
+   side panel shows that scan. Only then does it press Export.
+2. The scanner queues the job and stitches the tiles into one SVS file. Small slides take
+   under a minute, large ones many minutes. Overview-only captures have no scanned area,
+   so the scanner refuses them; they are marked `not_exportable`.
+3. When the job finishes, the scanner serves the file at a plain HTTPS URL on the device.
+   `download` (or `export --download`) fetches it with resume and verifies size and TIFF
+   header before moving it into `downloads/`.
+
+Exported files stay on the scanner's disk until deleted from its Exports menu, so export a
+few at a time. Full details: https://bmengineer.github.io/GrundiumDownloader/#export-mechanism
+
 ## Scheduling
 
 ```

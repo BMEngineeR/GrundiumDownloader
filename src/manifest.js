@@ -86,7 +86,8 @@ export class Manifest {
         // Deleted on the scanner but kept locally: only flag it if the local copy is gone too.
         if (rec.local_path && !fs.existsSync(rec.local_path)) {
           rec.status = "gone";
-          rec.last_error = `scan deleted on the scanner and local file missing: ${rec.local_path}`;
+          rec.gone_at = new Date().toISOString();
+          rec.lost_local_path = rec.local_path;   // kept separately; last_error is rewritten below
           rec.local_path = "";
         } else continue;
       }
@@ -95,7 +96,8 @@ export class Manifest {
       if (rec.status !== "gone") { rec.status = "gone"; rec.gone_at = new Date().toISOString(); }
       rec.export_url = ready ? ready.URL : "";
       rec.export_id = ready ? ready.ID : "";
-      rec.last_error = ready ? "scan deleted on the scanner; its export file is still downloadable" : (rec.last_error || "scan deleted on the scanner");
+      const lost = rec.lost_local_path ? `; local file missing: ${rec.lost_local_path}` : "";
+      rec.last_error = (ready ? "scan deleted on the scanner; its export file is still downloadable" : "scan deleted on the scanner") + lost;
     }
     this.data.updatedAt = new Date().toISOString();
     this.save();

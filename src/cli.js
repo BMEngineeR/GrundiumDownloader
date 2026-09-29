@@ -109,6 +109,10 @@ async function freshExportUrl(cfg, manifest, rec) {
 }
 
 async function downloadReady(cfg, manifest, opts = {}) {
+  if (!fs.existsSync(cfg.dest)) {
+    throw new Error(`download folder ${cfg.dest} does not exist. If it is on an external drive, mount it; ` +
+      `otherwise create it (mkdir) or run "GrundiumGrab init" again.`);
+  }
   // downloadable scans, failed ones with a URL, and deleted scans whose export file survived
   const todo = manifest.byStatus("downloadable")
     .concat(manifest.byStatus("failed").filter((r) => r.export_url))
@@ -127,7 +131,7 @@ async function downloadReady(cfg, manifest, opts = {}) {
       if (!head.ok && head.status !== 403 && head.status !== 404) throw new Error(`export URL not reachable (HTTP ${head.status})`);
       const fname = rec.export_url.split("/").pop() || rec.name + ".svs";
       const out = await fetchExport(rec.export_url, cfg.dest, decodeURIComponent(fname), head.size, { refreshUrl: () => freshExportUrl(cfg, manifest, rec) });
-      manifest.upsert(rec.uuid, { status: "downloaded", local_path: out.file, size_on_disk: out.size, tiff: out.kind, downloaded_at: new Date().toISOString(), verified_at: new Date().toISOString(), last_error: "", selected: false });
+      manifest.upsert(rec.uuid, { status: "downloaded", local_path: out.file, size_on_disk: out.size, tiff: out.kind, downloaded_at: new Date().toISOString(), verified_at: new Date().toISOString(), last_error: "", selected: false, lost_local_path: "", gone_at: "" });
       out.skipped ? summary.skipped++ : summary.downloaded++;
       info(out.skipped ? "already on disk, adopted" : "downloaded", { name: rec.name, file: out.file, size: out.size });
     } catch (e) {

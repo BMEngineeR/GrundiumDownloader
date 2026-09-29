@@ -79,7 +79,7 @@ export class Manifest {
       if (patch.status !== "downloaded" && cur?.status !== "downloaded" && dest) {
         const guess = path.join(dest, safeName(img.DisplayName) + ".svs");
         const v = verifyFile(guess);
-        if (v.ok) Object.assign(patch, { status: "downloaded", local_path: guess, verified_at: new Date().toISOString(), downloaded_at: cur?.downloaded_at || new Date().toISOString() });
+        if (v.ok) Object.assign(patch, { status: "downloaded", local_path: guess, lost_local_path: "", verified_at: new Date().toISOString(), downloaded_at: cur?.downloaded_at || new Date().toISOString() });
       }
       this.upsert(uuid, patch);
     }

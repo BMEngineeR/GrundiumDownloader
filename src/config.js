@@ -53,8 +53,11 @@ export function loadProject(root = findProjectRoot()) {
   cfg.captureDir = path.join(cfg.stateDir, "captures");
   if (process.env.GRUNDIUM_HEADLESS) cfg.headless = process.env.GRUNDIUM_HEADLESS.toLowerCase() !== "false";
   fs.mkdirSync(cfg.stateDir, { recursive: true });
-  fs.mkdirSync(cfg.dest, { recursive: true });
   fs.mkdirSync(cfg.captureDir, { recursive: true });
+  // Do not recreate the download folder here: if it lives on a drive that is not mounted,
+  // creating it would hide that fact and make every downloaded file look lost. "init"
+  // creates it; "download" refuses to run while it is missing.
+  cfg.destExists = fs.existsSync(cfg.dest);
   return cfg;
 }
 

@@ -9,7 +9,7 @@ import { listDevices, connectDevice, listImages, exportsState, storageStatus, de
 import { fetchExport, verifyFile, probe } from "./download.js";
 import { Manifest } from "./manifest.js";
 import { toCsv, toTable, COLUMNS } from "./csv.js";
-import { info, warn, error, sleep } from "./log.js";
+import { info, warn, error, sleep, notify } from "./log.js";
 import { ask } from "./prompt.js";
 import { pickScans } from "./picker.js";
 
@@ -222,8 +222,8 @@ program.command("export")
   .option("-s, --selected", "rows marked with x in the select column of scans.csv (batch)")
   .option("-l, --limit <n>", "max exports to start (default 1, or all marked rows with --selected)", (v) => parseInt(v, 10))
   .option("--dry-run", "only show what would be exported")
-  .option("-w, --wait", "stay connected until the exports finish, then mark them downloadable")
-  .option("-d, --download", "implies --wait; download the files as soon as they are ready")
+  .option("--no-wait", "return as soon as the scanner has accepted the jobs instead of waiting for them to finish")
+  .option("-d, --download", "also download the files once they are ready (off by default)")
   .option("--pick", "choose scans in a browser window (default when no filter is given)")
   .option("--no-browser", "with --pick: print the picker URL instead of opening a browser")
   .action(async (opts) => {
@@ -267,16 +267,25 @@ program.command("export")
         }
         manifest.save();
       }
-      if ((opts.wait || opts.download) && started.length) {
+      const finished = [];
+      if ((opts.wait !== false || opts.download) && started.length) {
         for (const rec of started) {
-          info("waiting for export to finish", { name: rec.name });
+          info("waiting for the scanner to finish the export", { name: rec.name });
           const r = await waitForExport(s.page, s.recorder, rec.name);
-          if (r.done) { manifest.upsert(rec.uuid, { status: "downloadable", export_url: r.done.URL, export_id: r.done.ID }); info("export finished", { name: rec.name, url: r.done.URL }); }
-          else { manifest.upsert(rec.uuid, { status: "not_exported", last_error: "export failed on scanner: " + JSON.stringify(r.failed) }); error("export failed on scanner", { name: rec.name }); }
+          if (r.done) {
+            manifest.upsert(rec.uuid, { status: "downloadable", export_url: r.done.URL, export_id: r.done.ID });
+            finished.push(rec);
+            notify(`Export finished: ${rec.name}  (${rec.size_gb} GB, now downloadable)`, { name: rec.name, url: r.done.URL });
+          } else {
+            manifest.upsert(rec.uuid, { status: "not_exported", last_error: "export failed on scanner: " + JSON.stringify(r.failed) });
+            notify(`Export FAILED on the scanner: ${rec.name}`, { name: rec.name, failed: r.failed });
+          }
           manifest.save();
         }
       }
       writeCsv(cfg, manifest);
+      if (started.length && opts.wait === false) notify(`${started.length} export(s) requested; the scanner is working. Check later with: GrundiumGrab list --status downloadable`);
+      else if (finished.length) notify(`All done: ${finished.length} of ${started.length} export(s) finished.` + (opts.download ? "" : ` Fetch them with: GrundiumGrab download${opts.selected ? " --selected" : ""}`));
     } finally { await s.close(); }
     if (opts.download) {
       // Only the scans this command exported (plus, with --selected, marked ones already

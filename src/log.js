@@ -29,3 +29,9 @@ export function progress(name, received, total, speedBps) {
 export function progressDone() {
   if (progressShown) { process.stdout.write("\n"); progressShown = false; }
 }
+
+/** Prominent terminal notice with a bell; a plain JSON line when not on a terminal. */
+export function notify(text, extra) {
+  if (process.stdout.isTTY) process.stdout.write(`\x07\n==> ${text}\n\n`);
+  else info(text, extra);
+}

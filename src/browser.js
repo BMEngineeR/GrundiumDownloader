@@ -77,6 +77,8 @@ export async function launchBrowser({ headless = true } = {}) {
 export async function closeBrowser(browser, { graceMs = 8000 } = {}) {
   const proc = browser.process();
   const timer = new Promise((r) => setTimeout(() => r("timeout"), graceMs));
+  // Closing pages without running their beforeunload handlers avoids the prompt entirely.
+  try { for (const p of await browser.pages()) await Promise.race([p.close({ runBeforeUnload: false }), timer]); } catch {}
   const result = await Promise.race([browser.close().then(() => "closed", () => "error"), timer]);
   if (result !== "closed") {
     warn("browser did not close in time, killing it", { result });

@@ -49,7 +49,7 @@ GrundiumGrab list --name GBM -f csv         # filter, print CSV
 GrundiumGrab download --limit 2             # at most two files this run
 GrundiumGrab export                         # choose scans in a browser window, then export them
 GrundiumGrab export --dry-run --limit 5     # preview which scans would be exported
-GrundiumGrab export --name N14-JM --limit 1 # ask the scanner to export one scan
+GrundiumGrab export --name N14-JM --limit 1 # export one scan, wait, announce on the terminal when done
 GrundiumGrab export --limit 3 --download    # export three, wait, download them, update csv
 GrundiumGrab export --selected --download   # export every row marked with x in scans.csv
 GrundiumGrab run --interval 0               # one refresh + download cycle, for cron

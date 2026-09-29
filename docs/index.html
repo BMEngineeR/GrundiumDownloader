@@ -156,10 +156,10 @@ GrundiumGrab download</code></pre>
   <li>Clears the selection the web app remembers from earlier sessions by toggling the header checkbox until it reads "0 of N selected". Without this, Export would act on whatever was selected last time.</li>
   <li>Ticks the one remaining card and reads the side panel to confirm it shows that scan's name. If not, it stops and records the reason.</li>
   <li>Presses Export and watches the network for the <code>DExportStart</code> call. Result code 0 means the export started; the export ID is recorded and the scan becomes <code>exporting</code>. If the "cannot be exported" dialog appears instead, it presses Cancel and marks the scan <code>not_exportable</code>.</li>
-  <li>With <code>--wait</code> or <code>--download</code> it stays on the page and reads each <code>DExportStateGet</code> reply until the job shows up as completed with its URL. The scan becomes <code>downloadable</code>; with <code>--download</code> the file is fetched over plain HTTP, verified, and the scan becomes <code>downloaded</code>.</li>
+  <li>It stays on the page and reads each <code>DExportStateGet</code> reply until the job shows up as completed with its URL, then rings the terminal bell and prints "Export finished". The scan becomes <code>downloadable</code>; with <code>--download</code> the file is also fetched over plain HTTP, verified, and the scan becomes <code>downloaded</code>.</li>
   <li>Rewrites <code>scans.csv</code>.</li>
 </ol>
-<p>Without <code>--wait</code> the tool exits right after step 5 and the scanner keeps working on its own. The next <code>list</code> or <code>download</code> finds the finished export in the completed list and continues from there.</p>
+<p>With <code>--no-wait</code> the tool exits right after step 5 and the scanner keeps working on its own. The next <code>list</code> or <code>download</code> finds the finished export in the completed list and continues from there.</p>
 
 <h2 id="install">Installation <a class="anchor" href="#install">#</a></h2>
 <p>Requires Node.js 20 or newer.</p>
@@ -254,12 +254,13 @@ GrundiumGrab list --cached -f json</code></pre>
   <dt>-s, --selected</dt><dd>Batch mode: every scan marked with <code>x</code> in the <code>select</code> column of <code>scans.csv</code>. See <a href="#batch-csv">Batch export from scans.csv</a>.</dd>
   <dt>-l, --limit &lt;n&gt;</dt><dd>Maximum number of exports to start. Default 1, or all marked rows with <code>--selected</code>.</dd>
   <dt>--dry-run</dt><dd>Only print what would be exported.</dd>
-  <dt>-w, --wait</dt><dd>Stay connected until the started exports finish and mark them <code>downloadable</code>.</dd>
-  <dt>-d, --download</dt><dd>Implies <code>--wait</code>. Download the exported files as soon as they are ready and mark them <code>downloaded</code>. Only the scans this command exported are downloaded; use <code>download</code> for everything else.</dd>
+  <dt>--no-wait</dt><dd>Return as soon as the scanner has accepted the jobs. By default the command stays until every export has finished and announces each one on the terminal with a bell.</dd>
+  <dt>-d, --download</dt><dd>Off by default. Also download the exported files once they are ready and mark them <code>downloaded</code>. Only the scans this command exported are downloaded (plus marked ones with <code>--selected</code>); use <code>download</code> for everything else.</dd>
 </dl>
 <pre><code>GrundiumGrab export                              # picker window, then export
 GrundiumGrab export --dry-run --limit 5          # preview
-GrundiumGrab export --name N14-JM --limit 1      # start one export, come back later with "download"
+GrundiumGrab export --name N14-JM --limit 1      # export one scan, wait, announce when done
+GrundiumGrab export --limit 3 --no-wait          # start three exports and return at once
 GrundiumGrab export --limit 3 --download         # export, wait, download, all in one go
 GrundiumGrab export --selected --download        # every row marked with x in scans.csv</code></pre>
 <h3 id="batch-csv">Batch export from scans.csv <a class="anchor" href="#batch-csv">#</a></h3>

@@ -124,6 +124,14 @@ rm -rf ~/.cache/puppeteer        # the downloaded Chrome
 rm -rf ~/slides/.grundium        # a project's credentials and state; keep downloads/ if you want the files
 ```
 
+## Code review
+
+Pull requests are reviewed automatically by Claude (`.github/workflows/claude-code-review.yml`),
+and `@claude` in an issue or PR comment asks Claude to answer or make changes
+(`.github/workflows/claude.yml`). Both need the [Claude GitHub App](https://github.com/apps/claude)
+installed on the repo and one repository secret: `CLAUDE_CODE_OAUTH_TOKEN` (from
+`claude setup-token`, uses a Claude subscription) or `ANTHROPIC_API_KEY` (from the Claude Console).
+
 ## Development
 
 ```bash

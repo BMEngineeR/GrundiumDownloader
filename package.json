@@ -20,5 +20,15 @@
     "@puppeteer/browsers": "^2.13.2",
     "commander": "^13.1.0",
     "puppeteer-core": "^24.43.1"
-  }
+  },
+  "files": [
+    "src/",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BMEngineeR/GrundiumDownloader.git"
+  },
+  "homepage": "https://bmengineer.github.io/GrundiumDownloader/",
+  "license": "MIT"
 }

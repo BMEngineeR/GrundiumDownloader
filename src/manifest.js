@@ -81,7 +81,15 @@ export class Manifest {
       this.upsert(uuid, patch);
     }
     for (const rec of this.all()) {
-      if (seen.has(rec.uuid) || rec.status === "downloaded") continue;
+      if (seen.has(rec.uuid)) continue;
+      if (rec.status === "downloaded") {
+        // Deleted on the scanner but kept locally: only flag it if the local copy is gone too.
+        if (rec.local_path && !fs.existsSync(rec.local_path)) {
+          rec.status = "gone";
+          rec.last_error = `scan deleted on the scanner and local file missing: ${rec.local_path}`;
+          rec.local_path = "";
+        } else continue;
+      }
       // Deleted on the scanner. A finished export can outlive its scan, so keep it reachable.
       const ready = readyByName.get(rec.name);
       if (rec.status !== "gone") { rec.status = "gone"; rec.gone_at = new Date().toISOString(); }

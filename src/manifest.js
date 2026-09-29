@@ -52,7 +52,14 @@ export class Manifest {
         user: img.UserName, size_bytes: img.Size, size_gb: (img.Size / 1e9).toFixed(2),
       };
       const ready = readyByName.get(img.DisplayName);
-      if (cur?.status === "downloaded") {
+      const localGone = cur?.status === "downloaded" && cur.local_path && !fs.existsSync(cur.local_path);
+      if (localGone) {
+        // The file vanished from disk: fall back to re-download or re-export on the next cycle.
+        Object.assign(patch, ready
+          ? { status: "downloadable", export_url: ready.URL, export_id: ready.ID }
+          : { status: "not_exported", export_url: "" },
+          { local_path: "", last_error: `local file missing: ${cur.local_path}` });
+      } else if (cur?.status === "downloaded") {
         // keep, but refresh URL in case a later export replaced it
         if (ready) Object.assign(patch, { export_url: ready.URL, export_id: ready.ID });
       } else if (ready) {

@@ -110,7 +110,8 @@
     <li><a href="#scheduling">Running on a schedule</a></li>
     <li><a href="#files">Files and folders</a></li>
     <li><a href="#troubleshooting">Troubleshooting</a></li>
-    <li><a href="#deleted">Deleted scans</a></li>
+    <li><a href="#deleted">Deleted on the scanner</a></li>
+    <li><a href="#local-loss">Deleted locally</a></li>
     <li><a href="#uninstall">Uninstalling</a></li>
     <li><a href="#limitations">Limitations</a></li>
   </ul>
@@ -413,6 +414,13 @@ rm -rf ~/slides/downloads           # the slide files, only if you do not want t
   <li>Finished exports outlive their scan on the device. If one exists, the gone scan keeps a download URL and <code>GrundiumGrab download</code> fetches it, until someone clears the Exports list on the scanner.</li>
 </ul>
 <p>Prevention is about copies and permissions: run <code>run</code> with <code>autoExport</code> on a machine with enough disk so every scan is copied shortly after it is made, and limit delete rights in the grundium.net team settings. A downloaded SVS can be uploaded back to the device by hand through its web UI.</p>
+
+<h2 id="local-loss">If a downloaded file is deleted or damaged locally <a class="anchor" href="#local-loss">#</a></h2>
+<ul>
+  <li><strong>Missing file:</strong> noticed by every refresh (<code>list</code>, <code>download</code>, <code>run</code>) and by <code>verify</code>. The scan goes back to <code>downloadable</code> if its export still exists on the scanner, else to <code>not_exported</code>, with <code>last_error</code> naming the missing path.</li>
+  <li><strong>Damaged file</strong> (wrong size, bad header, or a failing <code>tiffinfo</code> with <code>--deep</code>): noticed by <code>verify</code>, which marks the scan <code>failed</code>.</li>
+  <li><strong>Repair:</strong> <code>download</code> re-fetches anything with an export; <code>export --download</code> re-exports the rest. A <code>run</code> loop with <code>autoExport</code> does both on its own. As long as the scan is still on the scanner the file can always be rebuilt.</li>
+</ul>
 
 <h2 id="limitations">Limitations <a class="anchor" href="#limitations">#</a></h2>
 <ul>

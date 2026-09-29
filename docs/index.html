@@ -173,8 +173,11 @@ GrundiumGrab download</code></pre>
 GrundiumGrab init          # asks for your grundium.net email and password
 GrundiumGrab login         # confirms the credentials and lists your scanners
 GrundiumGrab list          # reads the archive, writes scans.csv
-GrundiumGrab download      # downloads whatever already has a finished export
+GrundiumGrab export --name &lt;part of a scan name&gt; --download
+                           # asks the scanner to export that scan, waits, downloads it
+GrundiumGrab download      # later: downloads anything else that has a finished export
 GrundiumGrab verify        # checks the files on disk</code></pre>
+<p>The <code>export</code> step is the one that makes files: a scan can only be downloaded after the scanner has exported it. Use <code>--limit 3</code> instead of <code>--name</code> to export the three newest scans. See <a href="#export-mechanism">How export works</a>.</p>
 <p><code>init</code> creates a project folder. Every other command finds the project by walking up from the current directory to the nearest <code>grundium.json</code>, so run them from inside that folder or any subfolder.</p>
 
 <h2 id="commands">Command reference <a class="anchor" href="#commands">#</a></h2>

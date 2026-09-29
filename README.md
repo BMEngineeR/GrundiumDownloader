@@ -24,12 +24,18 @@ GrundiumGrab login
 # 4. Inventory the scanner -> scans.csv
 GrundiumGrab list
 
-# 5. Download everything that already has a finished export
+# 5. Pick a scan, ask the scanner to export it, wait, download it
+GrundiumGrab export --name <part of the scan name> --download
+
+# 6. Later: download anything else that has a finished export
 GrundiumGrab download
 
-# 6. Check the files on disk
+# 7. Check the files on disk
 GrundiumGrab verify
 ```
+
+Step 5 is the one that makes files: a scan can only be downloaded after the scanner has
+exported it. Use `--limit 3` instead of `--name` to export the three newest scans.
 
 Chrome for Testing (about 350 MB) is downloaded automatically on the first browser command.
 

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { info } from "./log.js";
+import { info, progress, progressDone } from "./log.js";
 
 /** HEAD an export URL. Returns {ok, size} without downloading. */
 export async function probe(url) {
@@ -27,14 +27,16 @@ export async function httpDownload(url, target, { onProgress } = {}) {
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
   if (offset && res.status !== 206) { offset = 0; fs.rmSync(part, { force: true }); }
   const total = offset + (Number(res.headers.get("content-length")) || 0);
-  let received = offset, lastLog = Date.now();
+  let received = offset, lastLog = Date.now(), lastBytes = offset;
   const out = fs.createWriteStream(part, { flags: offset ? "a" : "w" });
   const src = Readable.fromWeb(res.body);
   src.on("data", (chunk) => {
     received += chunk.length;
-    if (onProgress && Date.now() - lastLog > 5000) { lastLog = Date.now(); onProgress(received, total); }
+    const dt = Date.now() - lastLog;
+    if (onProgress && dt > 1000) { onProgress(received, total, ((received - lastBytes) * 1000) / dt); lastLog = Date.now(); lastBytes = received; }
   });
   await pipeline(src, out);
+  onProgress?.(received, total, 0, true);
   const size = fs.statSync(part).size;
   if (total && size !== total) throw new Error(`incomplete: ${size} of ${total} bytes (rerun to resume)`);
   return { part, size, resumedFrom: offset };
@@ -71,7 +73,7 @@ export async function fetchExport(url, dest, name, expectedSize = 0) {
   const existing = verifyFile(target, expectedSize);
   if (existing.ok) return { file: target, size: existing.size, kind: existing.kind, skipped: true };
   const dl = await httpDownload(url, target, {
-    onProgress: (got, total) => info("downloading", { name, pct: total ? Math.round((got / total) * 100) : null, mb: Math.round(got / 1e6) }),
+    onProgress: (got, total, speed, done) => (done ? progressDone() : progress(name, got, total, speed)),
   });
   const v = verifyFile(dl.part, expectedSize);
   if (!v.ok) { fs.rmSync(dl.part, { force: true }); throw new Error(`verification failed: ${v.reason}`); }

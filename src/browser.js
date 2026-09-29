@@ -124,12 +124,14 @@ export class RpcRecorder {
   waitFor(method, { timeout = 30000 } = {}) {
     const match = typeof method === "function" ? method : (e) => e.method === method;
     return new Promise((resolve, reject) => {
-      const w = { match, resolve };
+      const w = { match, resolve: (e) => { clearTimeout(timer); resolve(e); } };
       this.waiters.push(w);
-      setTimeout(() => {
+      // unref so a pending wait never keeps the process alive after the browser is closed
+      const timer = setTimeout(() => {
         const i = this.waiters.indexOf(w);
         if (i >= 0) { this.waiters.splice(i, 1); reject(new Error(`Timed out waiting for RPC ${method}`)); }
       }, timeout);
+      timer.unref?.();
     });
   }
 
@@ -210,8 +212,8 @@ export async function enableDownloads(page, dir) {
   });
   return {
     next: (timeout = 30 * 60 * 1000) => new Promise((resolve, reject) => {
-      waiters.push(resolve);
-      setTimeout(() => reject(new Error("Timed out waiting for a download to finish")), timeout);
+      const timer = setTimeout(() => reject(new Error("Timed out waiting for a download to finish")), timeout);
+      waiters.push((d) => { clearTimeout(timer); resolve(d); });
     }),
     pending,
   };

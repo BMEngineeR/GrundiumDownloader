@@ -11,7 +11,7 @@ import { parseCsv, isMarked } from "./csv.js";
  *   downloaded    file on disk passed verification
  *   failed        last download/verification attempt failed (retried next time)
  *   not_exportable the scanner refused to export it (no scanned area, e.g. overview-only captures)
- *   gone          no longer listed on the scanner (kept for history)
+ *   gone          no longer listed on the scanner (kept for history; downloadable if an export survived)
  */
 export class Manifest {
   constructor(stateDir) {
@@ -73,7 +73,15 @@ export class Manifest {
       }
       this.upsert(uuid, patch);
     }
-    for (const rec of this.all()) if (!seen.has(rec.uuid) && rec.status !== "gone" && rec.status !== "downloaded") rec.status = "gone";
+    for (const rec of this.all()) {
+      if (seen.has(rec.uuid) || rec.status === "downloaded") continue;
+      // Deleted on the scanner. A finished export can outlive its scan, so keep it reachable.
+      const ready = readyByName.get(rec.name);
+      if (rec.status !== "gone") { rec.status = "gone"; rec.gone_at = new Date().toISOString(); }
+      rec.export_url = ready ? ready.URL : "";
+      rec.export_id = ready ? ready.ID : "";
+      rec.last_error = ready ? "scan deleted on the scanner; its export file is still downloadable" : (rec.last_error || "scan deleted on the scanner");
+    }
     this.data.updatedAt = new Date().toISOString();
     this.save();
   }

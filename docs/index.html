@@ -110,6 +110,7 @@
     <li><a href="#scheduling">Running on a schedule</a></li>
     <li><a href="#files">Files and folders</a></li>
     <li><a href="#troubleshooting">Troubleshooting</a></li>
+    <li><a href="#deleted">Deleted scans</a></li>
     <li><a href="#uninstall">Uninstalling</a></li>
     <li><a href="#limitations">Limitations</a></li>
   </ul>
@@ -305,7 +306,7 @@ GrundiumGrab run --interval 0    # one cycle</code></pre>
 <tr><td><code>downloaded</code></td><td>File on disk passed verification.</td><td>Nothing.</td></tr>
 <tr><td><code>failed</code></td><td>Last download or verification failed; see <code>last_error</code>.</td><td>Retried on the next <code>download</code>.</td></tr>
 <tr><td><code>not_exportable</code></td><td>The scanner refused to export it (no scanned area).</td><td>Nothing; it is skipped from now on.</td></tr>
-<tr><td><code>gone</code></td><td>No longer listed on the scanner.</td><td>Kept for history only.</td></tr>
+<tr><td><code>gone</code></td><td>Deleted on the scanner. Name, date, size, user and UUID are kept, with <code>gone_at</code>.</td><td>If an export file survived on the device, <code>export_url</code> is set and <code>download</code> still fetches it. Otherwise history only.</td></tr>
 </table>
 
 <h2 id="csv">scans.csv columns <a class="anchor" href="#csv">#</a></h2>
@@ -403,6 +404,15 @@ rm -rf ~/.cache/puppeteer           # the downloaded Chrome, about 350 MB
 rm -rf ~/slides/.grundium ~/slides/scans.csv ~/slides/grundium.json   # a project's settings and credentials
 rm -rf ~/slides/downloads           # the slide files, only if you do not want them</code></pre>
 <p>Nothing else is written anywhere: no system services, no shell profile changes, no keychain entries. Remove any cron line or systemd unit you created yourself.</p>
+
+<h2 id="deleted">If someone deletes scans on the scanner <a class="anchor" href="#deleted">#</a></h2>
+<p>The tool never deletes anything on the device and cannot undelete. What it does:</p>
+<ul>
+  <li>The next <code>list</code> marks the scan <code>gone</code> and keeps its name, date, size, user, UUID and the time it disappeared, in the manifest and in <code>scans.csv</code>.</li>
+  <li>Files already downloaded are untouched.</li>
+  <li>Finished exports outlive their scan on the device. If one exists, the gone scan keeps a download URL and <code>GrundiumGrab download</code> fetches it, until someone clears the Exports list on the scanner.</li>
+</ul>
+<p>Prevention is about copies and permissions: run <code>run</code> with <code>autoExport</code> on a machine with enough disk so every scan is copied shortly after it is made, and limit delete rights in the grundium.net team settings. A downloaded SVS can be uploaded back to the device by hand through its web UI.</p>
 
 <h2 id="limitations">Limitations <a class="anchor" href="#limitations">#</a></h2>
 <ul>

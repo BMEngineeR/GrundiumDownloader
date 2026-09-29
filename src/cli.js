@@ -109,7 +109,10 @@ async function freshExportUrl(cfg, manifest, rec) {
 }
 
 async function downloadReady(cfg, manifest, opts = {}) {
-  const todo = manifest.byStatus("downloadable").concat(manifest.byStatus("failed").filter((r) => r.export_url))
+  // downloadable scans, failed ones with a URL, and deleted scans whose export file survived
+  const todo = manifest.byStatus("downloadable")
+    .concat(manifest.byStatus("failed").filter((r) => r.export_url))
+    .concat(manifest.byStatus("gone").filter((r) => r.export_url))
     .filter((r) => matches(r, opts)).slice(0, opts.limit || Infinity);
   const summary = { downloaded: 0, skipped: 0, failed: 0 };
   const stopAwake = keepAwake();

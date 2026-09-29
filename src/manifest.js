@@ -5,7 +5,8 @@ import { parseCsv, isMarked } from "./csv.js";
 
 export const STORE_MARKER = ".grundium-store";
 export function writeStoreMarker(dest) {
-  fs.writeFileSync(path.join(dest, STORE_MARKER), "GrundiumGrab download folder. Do not delete; it tells the tool this drive is mounted.\n");
+  try { fs.writeFileSync(path.join(dest, STORE_MARKER), "GrundiumGrab download folder. Do not delete; it tells the tool this drive is mounted.\n"); return true; }
+  catch { return false; }   // read-only drive: fall back to the evidence check each time
 }
 
 /**
@@ -121,7 +122,7 @@ export class Manifest {
    * An unmounted drive or an empty mount point has no marker, so nothing there is
    * reported lost; a folder whose slides were deleted keeps its marker and works normally.
    * Projects created before the marker existed get one the first time the folder
-   * clearly is the real one (files recorded there and none missing); otherwise "init".
+   * clearly is the real one (some recorded files are there); otherwise "init".
    */
   localStoreAvailable(dest) {
     if (!fs.existsSync(dest)) return false;
@@ -130,7 +131,7 @@ export class Manifest {
     const inDest = this.all().filter((r) => r.status === "downloaded" && r.local_path && r.local_path.startsWith(dest + path.sep));
     // Auto-mark only with evidence that this is the real folder: recorded files present.
     // With nothing recorded there is no evidence, so the user confirms by running "init".
-    if (inDest.length > 0 && inDest.every((r) => fs.existsSync(r.local_path))) { writeStoreMarker(dest); return true; }
+    if (inDest.length > 0 && inDest.some((r) => fs.existsSync(r.local_path))) { writeStoreMarker(dest); return true; }
     return false;
   }
 

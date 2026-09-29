@@ -165,11 +165,16 @@ async function downloadReady(cfg, manifest, opts = {}) {
 program.command("init [dir]")
   .description("Create a project: grundium.json, encrypted credentials, downloads folder")
   .option("-u, --username <email>").option("-p, --password <pw>")
-  .option("--device <name>", "scanner name/UUID substring").option("--dest <dir>", "download folder", "downloads")
-  .option("--format <fmt>", "SVS or TIFF", "SVS")
+  .option("--device <name>", "scanner name/UUID substring").option("--dest <dir>", "download folder (default: downloads)")
+  .option("--format <fmt>", "SVS or TIFF (default: SVS)")
   .action(async (dir, opts) => {
     const root = path.resolve(dir || ".");
-    const cfg = initProject(root, { device: opts.device || "", dest: opts.dest, format: opts.format.toUpperCase() });
+    // Only override settings that were given, so re-running init keeps a custom dest/device/format.
+    const overrides = {};
+    if (opts.device !== undefined) overrides.device = opts.device;
+    if (opts.dest !== undefined) overrides.dest = opts.dest;
+    if (opts.format !== undefined) overrides.format = opts.format.toUpperCase();
+    const cfg = initProject(root, overrides);
     let { username, password } = opts;
     const stored = hasCredentials(cfg.stateDir);
     if (!username && !stored) username = process.env.GRUNDIUM_USERNAME || (await ask("grundium.net email: "));

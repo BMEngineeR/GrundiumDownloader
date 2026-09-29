@@ -1,9 +1,16 @@
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import childProcess from "node:child_process";
-import puppeteer from "puppeteer";
-import { install, Browser } from "@puppeteer/browsers";
+import puppeteer from "puppeteer-core";
+import { install, Browser, computeExecutablePath } from "@puppeteer/browsers";
+import { PUPPETEER_REVISIONS } from "puppeteer-core/internal/revisions.js";
 import { info, warn } from "./log.js";
+
+// puppeteer-core ships no browser and has no install script, so the CLI manages Chrome itself.
+export const CHROME_BUILD = PUPPETEER_REVISIONS.chrome;
+export const CACHE_DIR = process.env.PUPPETEER_CACHE_DIR || path.join(os.homedir(), ".cache", "puppeteer");
+export const CHROME_EXE = computeExecutablePath({ browser: Browser.CHROME, buildId: CHROME_BUILD, cacheDir: CACHE_DIR });
 
 /** True when the Chrome build is fully extracted (on macOS the app bundle must carry its framework). */
 function chromeComplete(exe) {
@@ -21,16 +28,13 @@ function hasSystemUnzip() {
 
 /**
  * Make sure the pinned Chrome for Testing build is present and complete.
- * npm may block puppeteer's postinstall script (global installs, --ignore-scripts), and
- * puppeteer's JavaScript unzip mishandles the symlinks inside the macOS app bundle and
- * leaves a 400 KB stub. So: download the archive, extract it with the system unzip when
- * one exists, and verify the result before letting Chrome launch.
+ * The JavaScript unzip used by @puppeteer/browsers mishandles the symlinks inside the
+ * macOS app bundle and leaves a 400 KB stub, so: download the archive, extract it with
+ * the system unzip when one exists, and verify the result before letting Chrome launch.
  */
 export async function ensureChrome() {
-  const exe = puppeteer.executablePath();
+  const exe = CHROME_EXE, cacheDir = CACHE_DIR, buildId = CHROME_BUILD;
   if (chromeComplete(exe)) return exe;
-  const cacheDir = puppeteer.configuration.cacheDirectory;
-  const buildId = puppeteer.defaultBrowserRevision;
   const versionDir = path.resolve(exe, process.platform === "darwin" ? "../../../../.." : "../..");
   if (fs.existsSync(versionDir)) {
     warn("removing incomplete Chrome folder", { dir: versionDir });
@@ -57,8 +61,9 @@ export async function ensureChrome() {
 }
 
 export async function launchBrowser({ headless = true } = {}) {
-  await ensureChrome();
+  const executablePath = await ensureChrome();
   return puppeteer.launch({
+    executablePath,
     headless,
     args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
     defaultViewport: { width: 1400, height: 900 },

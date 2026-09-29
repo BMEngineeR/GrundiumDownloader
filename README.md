@@ -45,9 +45,9 @@ One command, straight from GitHub:
 npm install -g github:BMEngineeR/GrundiumDownloader
 ```
 
-That gives you the global `GrundiumGrab` command. Chrome for Testing (about 350 MB) is
-downloaded on first use, or explicitly with `GrundiumGrab setup`. This works even when npm
-refuses to run install scripts for global packages, which recent npm versions do.
+That gives you the global `GrundiumGrab` command. The package has no install scripts;
+Chrome for Testing (about 350 MB) is downloaded into `~/.cache/puppeteer` on first use, or
+explicitly with `GrundiumGrab setup`. Set `PUPPETEER_CACHE_DIR` to put it elsewhere.
 
 Requires Node.js 20 or newer. On Linux servers also install `unzip` and the usual Chrome
 runtime libraries (`apt-get install -y unzip libnss3 libatk-bridge2.0-0 libgbm1 libasound2`).

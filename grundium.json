@@ -1,0 +1,10 @@
+{
+  "baseUrl": "https://grundium.net",
+  "device": "",
+  "dest": "downloads",
+  "format": "SVS",
+  "intervalMinutes": 15,
+  "autoExport": false,
+  "maxExportsPerCycle": 2,
+  "headless": true
+}

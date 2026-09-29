@@ -220,7 +220,7 @@ GrundiumGrab config credentials             # replace the stored email and passw
 </dl>
 <pre><code>GrundiumGrab list                           # newest first
 GrundiumGrab list --status downloadable     # ready to download
-GrundiumGrab list --name GBM -f csv &gt; gbm.csv
+GrundiumGrab list --name biopsy -f csv &gt; gbm.csv
 GrundiumGrab list --cached -f json</code></pre>
 <p>The refresh also logs the export queue (queued, ongoing, completed, failed), the scanner's free space and its current state (Idle or Scanning).</p>
 
@@ -270,7 +270,7 @@ GrundiumGrab list --cached -f json</code></pre>
 </dl>
 <pre><code>GrundiumGrab export                              # picker window, then export
 GrundiumGrab export --dry-run --limit 5          # preview
-GrundiumGrab export --name N14-JM --limit 1      # export one scan, wait, announce when done
+GrundiumGrab export --name "H&E" --limit 1      # export one scan, wait, announce when done
 GrundiumGrab export --limit 3 --no-wait          # start three exports and return at once
 GrundiumGrab export --limit 3 --download         # export, wait, download, all in one go
 GrundiumGrab export --selected --download        # every row marked with x in scans.csv</code></pre>
@@ -284,7 +284,7 @@ GrundiumGrab export --selected --download        # every row marked with x in sc
 <p>Marks are matched by the <code>uuid</code> column, so reformatting of dates or sizes by the spreadsheet does not matter. They survive every refresh and are cleared automatically when the scan reaches <code>downloaded</code>. <code>GrundiumGrab list --cached --selected</code> shows what is currently marked.</p>
 <p>For each scan the tool searches the archive by name, clears any selection the web app remembered from earlier sessions, ticks the one matching card, confirms that the side panel shows that scan, and only then presses Export. If any of these checks fails it refuses to press the button and records the reason in <code>last_error</code>.</p>
 <div class="warn">Each export is a full copy of the slide on the scanner's disk. Keep <code>--limit</code> small and clear finished exports on the device from time to time.</div>
-<div class="note">Overview-only captures, typically named like <code>20260610 Scanned Image 2627</code> and around 90 MB, have no scanned area. The scanner refuses to export them; the tool cancels the dialog and marks them <code>not_exportable</code> so they are not retried.</div>
+<div class="note">Overview-only captures, typically named like <code>20260610 Scanned Image 1234</code> and around 90 MB, have no scanned area. The scanner refuses to export them; the tool cancels the dialog and marks them <code>not_exportable</code> so they are not retried.</div>
 
 <h3 id="cmd-run"><code>GrundiumGrab run</code> <a class="anchor" href="#cmd-run">#</a></h3>
 <p>The scheduled loop. Each cycle: refresh the inventory, trigger exports if <code>autoExport</code> is on (at most <code>maxExportsPerCycle</code> in flight), download everything downloadable, record the results.</p>

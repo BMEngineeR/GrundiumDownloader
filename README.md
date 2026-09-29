@@ -45,11 +45,11 @@ Chrome for Testing (about 350 MB) is downloaded automatically on the first brows
 
 ```bash
 GrundiumGrab list --status downloadable     # what is ready right now
-GrundiumGrab list --name GBM -f csv         # filter, print CSV
+GrundiumGrab list --name biopsy -f csv         # filter, print CSV
 GrundiumGrab download --limit 2             # at most two files this run
 GrundiumGrab export                         # choose scans in a browser window, then export them
 GrundiumGrab export --dry-run --limit 5     # preview which scans would be exported
-GrundiumGrab export --name N14-JM --limit 1 # export one scan, wait, announce on the terminal when done
+GrundiumGrab export --name "H&E" --limit 1 # export one scan, wait, announce on the terminal when done
 GrundiumGrab export --limit 3 --download    # export three, wait, download them, update csv
 GrundiumGrab export --selected --download   # export every row marked with x in scans.csv
 GrundiumGrab run --interval 0               # one refresh + download cycle, for cron
@@ -118,7 +118,7 @@ reference, see the [documentation](https://bmengineer.github.io/GrundiumDownload
 - Credentials are stored AES-256-GCM encrypted in `.grundium/`. Never commit that folder.
 - Each export is a full copy on the scanner's disk. Export a few at a time and clear old
   exports on the device now and then.
-- Overview-only captures (named like "20260610 Scanned Image 2627") have no scanned area;
+- Overview-only captures (named like "20260610 Scanned Image 1234") have no scanned area;
   the scanner refuses to export them and they are marked `not_exportable`.
 - Not affiliated with Grundium. Relies on the grundium.net web app's internal protocol.
 

@@ -25,10 +25,6 @@ export async function connectDevice(page, recorder, { device, timeout = 60000 } 
   // result. When the relay cannot reach the device, calls come back with a null result.
   const live = (e) => e.method === "DStateGet" && Array.isArray(e.result);
   const first = recorder.entries.slice(-50).find(live) || (await recorder.waitFor(live, { timeout: 30000 }).catch(() => null));
-  // A failed DLicenseCheck makes the web app drop the device session at once.
-  const lic = recorder.entries.slice(-80).find((e) => e.method === "DLicenseCheck" && e.error);
-  if (lic) throw new Error(`scanner refused the remote session: license check failed (${lic.error.message}, code ${lic.error.code}). ` +
-    "Check the scanner's licence/cloud status on the device or in the grundium.net portal; nothing the CLI can do.");
   if (!first) {
     const nulls = recorder.entries.filter((e) => /^D[A-Z]/.test(e.method) && e.result === null).length;
     throw new Error(`device UI loaded (${page.url()}) but the scanner did not answer (${nulls} device calls returned nothing). ` +

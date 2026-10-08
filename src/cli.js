@@ -5,7 +5,7 @@ import { Command } from "commander";
 import { PROJECT_FILE, initProject, loadProject, credentialsFor } from "./config.js";
 import { saveCredentials, hasCredentials } from "./secrets.js";
 import { launchBrowser, closeBrowser, RpcRecorder, login, screenshot, ensureChrome } from "./browser.js";
-import { listDevices, connectDevice, listImages, exportsState, storageStatus, deviceState, triggerExport, waitForExport } from "./scanner.js";
+import { listDevices, connectDevice, listImages, exportsState, storageStatus, deviceState, triggerExport, waitForExport, deleteExport, readStorage } from "./scanner.js";
 import { fetchExport, verifyFile, probe, abortDownloads } from "./download.js";
 import { spawn } from "node:child_process";
 import { Manifest } from "./manifest.js";
@@ -344,6 +344,92 @@ program.command("export")
       if (uuids.size) info("download finished", await downloadReady(cfg, manifest, { uuids }));
     }
     console.log(JSON.stringify(manifest.summary()));
+  });
+
+program.command("clean")
+  .description("Delete export copies (the cache; never the scans) on the scanner for scans already downloaded")
+  .option("--downloaded", "every downloaded scan that still has an export copy")
+  .option("-s, --selected", "rows marked with x in the select column of scans.csv")
+  .option("-n, --name <substring>").option("--uuid <uuid>")
+  .option("--dry-run", "only show what would be deleted")
+  .option("-y, --yes", "do not ask for confirmation")
+  .action(async (opts) => {
+    const cfg = loadProject();
+    const manifest = new Manifest(cfg.stateDir);
+    assertStore(cfg, manifest);
+    if (!opts.downloaded && !opts.selected && !opts.name && !opts.uuid) throw new Error("say which scans: --downloaded, --selected, --name <text> or --uuid <uuid>");
+    const s = await refresh(cfg, manifest);   // reads the select marks and the live export list
+    try {
+      const exports = exportsState(s.recorder);
+      const before = storageStatus(s.recorder);
+      const nameOf = (d) => (d.Description?.match(/^'(.*)' to /) || [])[1];
+      const nameCount = {};
+      for (const r of manifest.all()) nameCount[r.name] = (nameCount[r.name] || 0) + 1;
+      const candidates = manifest.rows().filter((r) => (!opts.downloaded || r.status === "downloaded") && matches(r, opts));
+
+      const plan = [], skipped = [];
+      for (const rec of candidates) {
+        if (rec.status !== "downloaded") { skipped.push([rec, `status is ${rec.status}, not downloaded`]); continue; }
+        const v = verifyFile(rec.local_path, rec.size_on_disk || 0);
+        if (!v.ok) { skipped.push([rec, `local file check failed: ${v.reason}`]); continue; }
+        if (exports.ongoing.some((e) => nameOf(e) === rec.name)) { skipped.push([rec, "an export of this scan is still running"]); continue; }
+        let copies = exports.completed.filter((e) => nameOf(e) === rec.name);
+        if (nameCount[rec.name] > 1) {
+          // Several scans share this name: only the copy recorded for this scan is known to be its own.
+          const other = copies.filter((e) => e.ID !== rec.export_id);
+          if (other.length) warn("name shared by several scans; leaving their other export copies alone", { name: rec.name, ids: other.map((e) => e.ID) });
+          copies = copies.filter((e) => e.ID === rec.export_id);
+        }
+        if (!copies.length) { skipped.push([rec, "no export copy on the scanner"]); continue; }
+        plan.push({ rec, copies, size: v.size });
+      }
+
+      for (const [r, why] of skipped) console.log(`skip  ${r.date}  ${r.name}: ${why}`);
+      if (!plan.length) { info("nothing to delete"); writeCsv(cfg, manifest); return; }
+      const nCopies = plan.reduce((n, p) => n + p.copies.length, 0);
+      console.log(`\nExport copies to delete on the scanner (the scans themselves stay):`);
+      for (const p of plan) {
+        console.log(`  ${p.rec.date}  ${p.rec.name}`);
+        console.log(`      local file: ${p.rec.local_path} (${(p.size / 1e9).toFixed(2)} GB, checked)`);
+        console.log(`      export copies: ${p.copies.map((c) => c.ID).join(", ")}`);
+      }
+      console.log(`\n${nCopies} export cop${nCopies === 1 ? "y" : "ies"} of ${plan.length} scan(s); scanner free now ${(before?.freeBytes / 1e9).toFixed(2)} GB.`);
+      if (opts.dryRun) { writeCsv(cfg, manifest); return; }
+      if (!opts.yes) {
+        const answer = await ask(`Delete these ${nCopies} export cop${nCopies === 1 ? "y" : "ies"}? Type yes to continue: `);
+        if (answer.toLowerCase() !== "yes") { info("cancelled; nothing deleted"); writeCsv(cfg, manifest); return; }
+      }
+
+      const audit = path.join(cfg.stateDir, "deletions.jsonl");
+      const done = [];
+      let deleted = 0;
+      for (const p of plan) {
+        const ids = [];
+        for (const c of p.copies) {
+          try {
+            await deleteExport(s.page, s.recorder, c);
+            ids.push(c.ID); deleted++;
+            fs.appendFileSync(audit, JSON.stringify({ ts: new Date().toISOString(), uuid: p.rec.uuid, name: p.rec.name, export_id: c.ID, url: c.URL, local_path: p.rec.local_path }) + "\n");
+          } catch (e) {
+            error("export copy not deleted", { name: p.rec.name, id: c.ID, err: String(e.message || e) });
+            manifest.upsert(p.rec.uuid, { last_error: `clean: ${e.message || e}` });
+          }
+        }
+        if (ids.length === p.copies.length) {
+          manifest.upsert(p.rec.uuid, { cache_deleted: true, cache_deleted_at: new Date().toISOString(), export_url: "", last_error: "" });
+          done.push(p.rec.uuid);
+        }
+        manifest.save();
+      }
+      const after = await readStorage(s.page, s.recorder);
+      manifest.save();
+      writeCsv(cfg, manifest);
+      info("clean finished", {
+        scans: done.length, copies_deleted: deleted, copies_planned: nCopies,
+        free_before_gb: before && (before.freeBytes / 1e9).toFixed(2), free_after_gb: after && (after.freeBytes / 1e9).toFixed(2),
+        freed_gb: before && after ? ((after.freeBytes - before.freeBytes) / 1e9).toFixed(2) : null,
+      });
+    } finally { await s.close(); }
   });
 
 program.command("verify")

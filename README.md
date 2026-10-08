@@ -77,6 +77,33 @@ file once is enough. A mark is cleared automatically when the scan is downloaded
 can stay open in a spreadsheet while a command runs: each command backs it up to
 `.grundium/scans.backup.csv` first and merges your marks back when it finishes.
 
+## Free scanner space: delete export copies
+
+Every export is a full SVS copy on the scanner's disk. Once a scan is downloaded, its export
+copy (the cache) can go; the scan itself stays on the scanner and can be exported again.
+
+```bash
+GrundiumGrab clean --downloaded --dry-run   # list the export copies that would be deleted
+GrundiumGrab clean --downloaded             # same list, asks you to type "yes", then deletes them
+GrundiumGrab clean --selected               # only rows marked with x in scans.csv
+GrundiumGrab clean --name "H&E"             # only scans whose name contains the text
+```
+
+`clean` only touches rows whose status is `downloaded` and whose local file passes the size
+and TIFF-header check. It presses the "Remove" button of each export copy in the scanner's
+Exports menu (`DExportCancel`) and never deletes a scan. Each deletion is logged in
+`.grundium/deletions.jsonl`.
+
+Every refresh (`list`, `download`, `export`, `clean`, `run`) reads the scanner and records
+in `scans.csv`:
+
+| Column | Meaning |
+|---|---|
+| `GrundiumFileDeleted` | `true` when the scan is no longer on the scanner |
+| `GrundiumFileDeletedAt` | when that was first seen |
+| `GrundiumCacheDeleted` | `true` when the scan had an export copy and the scanner no longer has it |
+| `GrundiumCacheDeletedAt` | when that was first seen, or when `clean` deleted it |
+
 ## How export works
 
 A scan is stored on the scanner as tiles in Grundium's own format. It can only be

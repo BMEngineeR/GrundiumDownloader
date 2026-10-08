@@ -48,6 +48,13 @@ export class Manifest {
     const readyByName = new Map();
     for (const c of exports.completed || []) if (c.URL && nameOf(c)) readyByName.set(nameOf(c), c);
     const busyNames = new Set([...(exports.ongoing || [])].map(nameOf).filter(Boolean));
+    // Every name that still has an export copy (the "cache") on the scanner, with or without a URL.
+    const copyNames = new Set([...(exports.completed || []), ...(exports.failed || [])].map(nameOf).filter(Boolean));
+    const now = new Date().toISOString();
+    // Cache state from the live export list: a scan that once had an export copy and has none now.
+    const cacheState = (name, cur, exportId) => copyNames.has(name) || busyNames.has(name)
+      ? { cache_deleted: false, cache_deleted_at: "" }
+      : (cur?.export_id || exportId) ? { cache_deleted: true, cache_deleted_at: cur?.cache_deleted_at || now } : { cache_deleted: false, cache_deleted_at: "" };
     // If the download folder is unavailable (unplugged drive, empty mount point), say nothing
     // about local files rather than declaring every one of them lost.
     const destOk = !dest || this.localStoreAvailable(dest);
@@ -69,8 +76,9 @@ export class Manifest {
           : { status: "not_exported", export_url: "" },
           { local_path: "", last_error: `local file missing: ${cur.local_path}` });
       } else if (cur?.status === "downloaded") {
-        // keep, but refresh URL in case a later export replaced it
+        // keep, but refresh URL in case a later export replaced it; a deleted copy leaves no link
         if (ready) Object.assign(patch, { export_url: ready.URL, export_id: ready.ID });
+        else if (!copyNames.has(img.DisplayName)) patch.export_url = "";
       } else if (ready) {
         Object.assign(patch, { status: "downloadable", export_url: ready.URL, export_id: ready.ID });
       } else if (busyNames.has(img.DisplayName)) {
@@ -87,10 +95,13 @@ export class Manifest {
         const v = verifyFile(guess);
         if (v.ok) Object.assign(patch, { status: "downloaded", local_path: guess, lost_local_path: "", verified_at: new Date().toISOString(), downloaded_at: cur?.downloaded_at || new Date().toISOString() });
       }
+      Object.assign(patch, { file_deleted: false, file_deleted_at: "" }, cacheState(img.DisplayName, cur, patch.export_id));
       this.upsert(uuid, patch);
     }
     for (const rec of this.all()) {
       if (seen.has(rec.uuid)) continue;
+      // Not listed on the scanner any more: the scan file itself is deleted there.
+      Object.assign(rec, { file_deleted: true, file_deleted_at: rec.file_deleted_at || rec.gone_at || now }, cacheState(rec.name, rec));
       // A lost local copy that is back (drive re-mounted, file restored): downloaded again.
       if (rec.status === "gone" && rec.lost_local_path && fs.existsSync(rec.lost_local_path)) {
         Object.assign(rec, { status: "downloaded", local_path: rec.lost_local_path, lost_local_path: "", gone_at: "", last_error: "" });
@@ -138,7 +149,11 @@ export class Manifest {
   rows() {
     return this.all()
       .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
-      .map((r) => ({ ...r, select: r.selected ? "x" : "" }));
+      .map((r) => ({
+        ...r, select: r.selected ? "x" : "",
+        GrundiumFileDeleted: r.file_deleted ? "true" : "false", GrundiumFileDeletedAt: r.file_deleted_at || "",
+        GrundiumCacheDeleted: r.cache_deleted ? "true" : "false", GrundiumCacheDeletedAt: r.cache_deleted_at || "",
+      }));
   }
 
   /**

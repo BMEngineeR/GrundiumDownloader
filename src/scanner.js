@@ -123,6 +123,54 @@ export function deviceState(recorder) {
 }
 
 /**
+ * Reload the archive page and return fresh storage numbers. DStorageStatus is only sent
+ * when the page loads, so in-app navigation is not enough here.
+ */
+export async function readStorage(page, recorder, { timeout = 60000 } = {}) {
+  const since = Date.now();
+  await page.goto(`${deviceUiBase(page)}/archive`, { waitUntil: "domcontentloaded", timeout }).catch(() => {});
+  await recorder.waitFor((e) => e.method === "DStorageStatus" && e.ts >= since, { timeout }).catch(() => {});
+  await recorder.waitFor((e) => e.method === "DExportStateGet" && e.ts >= since, { timeout }).catch(() => {});
+  await dismissDialogs(page);
+  return storageStatus(recorder);
+}
+
+/**
+ * Delete one finished export copy (the SVS file the scanner wrote), never the scan itself.
+ * Presses the row's "Remove" button in the Exports menu, which sends DExportCancel(<ID>),
+ * the same as a user would. The row is found by its download link, which is unique per
+ * copy; names can repeat. Resolves with the DExportCancel call once the ID has left the list.
+ */
+export async function deleteExport(page, recorder, exp, { timeout = 30000 } = {}) {
+  if (!exp?.ID || !exp.URL) throw new Error("export has no ID or URL; cannot identify its row");
+  await dismissDialogs(page);
+  const opened = await page.evaluate(() => {
+    const el = [...document.querySelectorAll("button,a,div")].find((e) => e.childElementCount < 6 && /^\s*Exports\s*$/.test(e.textContent || ""));
+    if (!el) return false; el.click(); return true;
+  });
+  if (!opened) throw new Error("Exports menu button not found");
+  await sleep(1500);
+  const since = Date.now();
+  const clicked = await page.evaluate((u) => {
+    const rows = [...document.querySelectorAll(".export-status-menu-item--done")].filter((r) => r.querySelector("a.export-status-menu__link")?.href === u);
+    if (rows.length !== 1) return `rows matching the link: ${rows.length}`;
+    const b = rows[0].querySelector(".export-status-menu-item__controls button");
+    if (!b) return "no Remove button in the row";
+    b.click(); return "ok";
+  }, exp.URL);
+  if (clicked !== "ok") { await page.keyboard.press("Escape").catch(() => {}); throw new Error(`export row not clicked (${clicked})`); }
+  const call = await recorder.waitFor((e) => e.method === "DExportCancel" && e.ts >= since, { timeout });
+  await page.keyboard.press("Escape").catch(() => {});
+  if (call.error) throw new Error(`DExportCancel failed: ${call.error.message || JSON.stringify(call.error)}`);
+  if (call.params?.[0] !== exp.ID) throw new Error(`DExportCancel went to ${call.params?.[0]}, expected ${exp.ID}`);
+  // The app re-reads the export list right after the delete; wait until the ID is gone.
+  const gone = (e) => e.method === "DExportStateGet" && e.ts >= call.ts && Array.isArray(e.result) && !(e.result[2] || []).some((c) => c.ID === exp.ID);
+  if (!recorder.entries.some(gone)) await recorder.waitFor(gone, { timeout }).catch(() => { throw new Error(`export ${exp.ID} still listed after DExportCancel`); });
+  info("export copy deleted", { id: exp.ID, description: exp.Description });
+  return call;
+}
+
+/**
  * Export queue from the latest DExportStateGet reply:
  * result = [queued, onGoing[], completed[], failed[]], entries {ID, Description, URL, URLNewTab}.
  */

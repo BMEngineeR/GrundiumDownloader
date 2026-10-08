@@ -176,8 +176,9 @@ export async function deleteExport(page, recorder, exp, { timeout = 30000 } = {}
  */
 export function exportsState(recorder) {
   const r = recorder.find("DExportStateGet")?.result;
-  if (!r) return { queued: 0, ongoing: [], completed: [], failed: [] };
-  return { queued: r[0] || 0, ongoing: r[1] || [], completed: r[2] || [], failed: r[3] || [] };
+  // known:false means no reply was recorded, which is not the same as "no exports".
+  if (!r) return { known: false, queued: 0, ongoing: [], completed: [], failed: [] };
+  return { known: true, queued: r[0] || 0, ongoing: r[1] || [], completed: r[2] || [], failed: r[3] || [] };
 }
 
 /**

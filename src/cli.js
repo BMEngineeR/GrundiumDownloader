@@ -361,6 +361,7 @@ program.command("clean")
     const s = await refresh(cfg, manifest);   // reads the select marks and the live export list
     try {
       const exports = exportsState(s.recorder);
+      if (!exports.known) throw new Error("the scanner's export list was not received; nothing deleted. Try again.");
       const before = storageStatus(s.recorder);
       const nameOf = (d) => (d.Description?.match(/^'(.*)' to /) || [])[1];
       const nameCount = {};

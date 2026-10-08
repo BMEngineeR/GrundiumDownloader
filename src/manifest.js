@@ -51,8 +51,10 @@ export class Manifest {
     // Every name that still has an export copy (the "cache") on the scanner, with or without a URL.
     const copyNames = new Set([...(exports.completed || []), ...(exports.failed || [])].map(nameOf).filter(Boolean));
     const now = new Date().toISOString();
+    // Without an export-list reply nothing is known about export copies: leave their state alone.
+    const exportsKnown = exports.known !== false;
     // Cache state from the live export list: a scan that once had an export copy and has none now.
-    const cacheState = (name, cur, exportId) => copyNames.has(name) || busyNames.has(name)
+    const cacheState = (name, cur, exportId) => !exportsKnown ? {} : copyNames.has(name) || busyNames.has(name)
       ? { cache_deleted: false, cache_deleted_at: "" }
       : (cur?.export_id || exportId) ? { cache_deleted: true, cache_deleted_at: cur?.cache_deleted_at || now } : { cache_deleted: false, cache_deleted_at: "" };
     // If the download folder is unavailable (unplugged drive, empty mount point), say nothing
@@ -78,7 +80,7 @@ export class Manifest {
       } else if (cur?.status === "downloaded") {
         // keep, but refresh URL in case a later export replaced it; a deleted copy leaves no link
         if (ready) Object.assign(patch, { export_url: ready.URL, export_id: ready.ID });
-        else if (!copyNames.has(img.DisplayName)) patch.export_url = "";
+        else if (exportsKnown && !copyNames.has(img.DisplayName)) patch.export_url = "";
       } else if (ready) {
         Object.assign(patch, { status: "downloadable", export_url: ready.URL, export_id: ready.ID });
       } else if (busyNames.has(img.DisplayName)) {

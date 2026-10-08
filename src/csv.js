@@ -1,6 +1,7 @@
 export const COLUMNS = [
   "select", "status", "name", "date", "time", "size_bytes", "size_gb", "user", "uuid",
   "local_path", "downloaded_at", "verified_at", "export_url", "export_id", "last_error",
+  "GrundiumFileDeleted", "GrundiumFileDeletedAt", "GrundiumCacheDeleted", "GrundiumCacheDeletedAt",
 ];
 
 function cell(v) {

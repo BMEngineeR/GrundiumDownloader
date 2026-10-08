@@ -11,6 +11,12 @@ with resume and verification, and can run on a schedule on a laptop or a server.
 Requires Node.js 20 or newer.
 
 ```bash
+# 0. Check the Node.js version: it must print v20 or higher
+node -v
+#    Older (e.g. v10 or v18)? Install a newer one without root, then open a new shell:
+#    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+#    nvm install 20 && nvm use 20
+
 # 1. Install the global command
 npm install -g github:BMEngineeR/GrundiumDownloader
 
@@ -32,6 +38,10 @@ GrundiumGrab download
 
 # 7. Check the files on disk
 GrundiumGrab verify
+
+# 8. Free scanner space: delete the export copies of downloaded scans (scans stay)
+GrundiumGrab clean --downloaded --dry-run   # show the list only
+GrundiumGrab clean --downloaded             # asks you to type "yes", then deletes
 ```
 
 Step 5 opens a page in your browser listing every scan with checkboxes, search and a

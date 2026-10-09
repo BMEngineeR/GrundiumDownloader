@@ -214,13 +214,22 @@ export async function triggerExport(page, recorder, image, { timeout = 30000 } =
   if (!/^0 of/.test(await header())) throw new Error(`could not clear selection (header: ${await header()})`);
 
   // 3. Tick the single card left by the search and verify the side panel shows it.
-  const ticked = await page.evaluate(() => {
-    const boxes = [...document.querySelectorAll("mat-checkbox")].filter((b) => !b.closest(".al-grid-header-selection"));
-    if (boxes.length !== 1) return boxes.length;
+  //    The search matches substrings ("X" also finds "X_rescan"), so with several cards keep
+  //    only the one whose name is exactly the scan name.
+  const ticked = await page.evaluate((name) => {
+    let boxes = [...document.querySelectorAll("mat-checkbox")].filter((b) => !b.closest(".al-grid-header-selection"));
+    if (boxes.length > 1) {
+      const cardOf = (b) => { let c = b; while (c.parentElement && c.parentElement.querySelectorAll("mat-checkbox").length === 1) c = c.parentElement; return c; };
+      const exact = (b) => [...cardOf(b).querySelectorAll("*")].some((e) => e.childElementCount === 0 && (e.textContent || "").trim() === name.trim());
+      const found = boxes.length;
+      boxes = boxes.filter(exact);
+      if (boxes.length !== 1) return `${found} cards after search, ${boxes.length} with exactly this name`;
+    }
+    if (boxes.length !== 1) return `${boxes.length} cards after search`;
     boxes[0].querySelector("label").click();
     return 1;
-  });
-  if (ticked !== 1) throw new Error(`expected exactly one card after search, found ${ticked}`);
+  }, image.name);
+  if (ticked !== 1) throw new Error(`expected exactly one card for this name: ${ticked}`);
   await sleep(1200);
   const h = await header();
   if (!/^1 of/.test(h) || !(await panelInputs()).includes(image.name)) {
